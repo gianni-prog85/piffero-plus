@@ -1,7 +1,7 @@
 # Spec: Stream Parser & JSONPath Engine
 
 ## Purpose
-Definisce il comportamento garantito del motore di parsing streaming e del matcher JSONPath di Piffero.
+Definisce il comportamento garantito del motore di parsing streaming e del matcher JSONPath di `piffero-plus`.
 
 ## Requirements
 

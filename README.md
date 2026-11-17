@@ -1,9 +1,9 @@
-# PIFFERO  [![Build Status](https://travis-ci.com/gfiorentino/piffero.svg?branch=master)](https://travis-ci.com/github/gfiorentino/piffero) [![Coverage Status](https://coveralls.io/repos/github/gfiorentino/piffero/badge.svg?branch=master)](https://coveralls.io/github/gfiorentino/piffero?branch=master) [![NPM version](https://img.shields.io/npm/v/piffero.svg)](https://www.npmjs.com/package/piffero)
+# PIFFERO-PLUS  [![NPM version](https://img.shields.io/npm/v/piffero-plus.svg)](https://www.npmjs.com/package/piffero-plus)
 The ultimate streaming JSONPath parser for Node.js
 
-Piffero is an open source SAX-like parser that operates directly on Node.js streams to extract parts of large JSON files without loading the entire document into memory.
+`piffero-plus` is an open source SAX-like parser (evolved from `piffero`) that operates directly on Node.js streams to extract parts of large JSON files without loading the entire document into memory.
 
-Piffero can process JSON files larger than available RAM and return the matched values as a valid JSON array stream, string, or Promise—with early stream termination on deterministic queries and full Node.js stream backpressure support.
+`piffero-plus` can process JSON files larger than available RAM and return the matched values as a valid JSON array stream, string, or Promise—with early stream termination on deterministic queries and full Node.js stream backpressure support.
 
 ```
   ______________________________ .  ♪
@@ -11,7 +11,7 @@ Piffero can process JSON files larger than available RAM and return the matched 
                                  '
 ```
 
-## Why Piffero?
+## Why `piffero-plus`?
 
 - **Zero runtime dependencies**: Lightweight and self-contained (`dependencies: {}`), with bundled TypeScript declarations (`.d.ts`).
 - **Larger-than-RAM streaming**: Parses Node.js `Readable` streams token-by-token (`CStream` + `StreamingPathEngine`) without loading the full JSON document or allocating JavaScript objects for unmatched branches.
@@ -23,7 +23,7 @@ Piffero can process JSON files larger than available RAM and return the matched 
 
 # Description
 
-Piffero supports both [Stefan Goessner's JSONPath](http://goessner.net/articles/JsonPath/) and the [RFC 9535](https://www.rfc-editor.org/info/rfc9535/) standard semantics on streaming JSON:
+`piffero-plus` supports both [Stefan Goessner's JSONPath](http://goessner.net/articles/JsonPath/) and the [RFC 9535](https://www.rfc-editor.org/info/rfc9535/) standard semantics on streaming JSON:
 
 JSONPath           | Description                                                                   | Implemented
 -------------------|-------------------------------------------------------------------------------|------------
@@ -38,8 +38,6 @@ JSONPath           | Description                                                
 `?()` / `?`        | RFC 9535 filter expressions (`===`, `!==`, `==`, `!=`, `>`, `<`, `>=`, `<=`, `&&`, `\|\|`, `!`, existence, structural equality) | ✅
 `()`               | Script expressions (static arithmetic and `@.length` expressions)              | ✅
 
-See the [replit.com demo](https://replit.com/@nigrosimone/Piffero#index.js).
-
 ## Supported JSONPath Capabilities
 
 | Feature | Examples | Notes |
@@ -52,19 +50,19 @@ See the [replit.com demo](https://replit.com/@nigrosimone/Piffero#index.js).
 | **RFC 9535 Filters (`?` / `?()`)** | `$[?@.v]`, `$[?@.a == @.b]`, `$[?@.price >= 10 && @.inStock]`, `$.scores[?(@ > 10)]` | Parenless `?[...]` & `?([...])`, falsy-safe existence, strict `==` + deep structural equality, `NOTHING`-safe comparisons, `PrunedJsBuilder` field pruning |
 | **Script Expressions (`()`)** | `$.employees[(1+1)]`, `$.employees[(@.length-1)].name` | Static index calculation and O(*k*) tail-buffered `@.length - k` evaluation |
 
-> **Output format:** Piffero always produces a valid JSON array (`[...]`) whether consumed as a stream, callback string, or Promise—preserving document order for wildcards/filters/slices (reversed on negative-step slices) and exact **selector order (including duplicates)** inside union brackets `[,]` per RFC 9535.
+> **Output format:** `piffero-plus` always produces a valid JSON array (`[...]`) whether consumed as a stream, callback string, or Promise—preserving document order for wildcards/filters/slices (reversed on negative-step slices) and exact **selector order (including duplicates)** inside union brackets `[,]` per RFC 9535.
 
 # Get Started
 
-*Step 1*: install Piffero
+*Step 1*: install `piffero-plus`
 
 ```bash
-npm i piffero
+npm i piffero-plus
 ```
 
-*Step 2*: use Piffero
+*Step 2*: use `piffero-plus`
 
-Call one of the three static methods on `Piffero`:
+Call one of the three static methods on `Piffero` (exported by `piffero-plus`):
 
 - `Piffero.findByPath(inputStream: Readable, jsonPath?: string): Stream` — returns a `Readable` stream emitting the matched JSON array (backpressure-aware, chunked output).
 - `Piffero.findAsString(callback: (result: any, err?: any) => void, inputStream: Readable, jsonPath?: string): void` — invokes `callback(result, err)` once matching completes.
@@ -120,7 +118,7 @@ Below are examples based on `employees.json`:
 Extract the second employee (`"Joe Black"`) as a stream:
 
 ```js
-const { Piffero } = require('piffero');
+const { Piffero } = require('piffero-plus');
 const fs = require('fs');
 
 const inputStream = fs.createReadStream('./employees.json');
@@ -139,7 +137,7 @@ resultStream.on('error', err => console.error(err));
 ### Example: Extract with `findAsString()` and `findAsPromise()`
 
 ```js
-const { Piffero } = require('piffero');
+const { Piffero } = require('piffero-plus');
 const fs = require('fs');
 
 // Callback style
@@ -201,7 +199,7 @@ await Piffero.findAsPromise(fs.createReadStream('./employees.json'), '$.employee
 ```ts
 import * as fs from "fs";
 import * as express from "express";
-import { Piffero } from "piffero";
+import { Piffero } from "piffero-plus";
 
 const app: express.Application = express();
 
@@ -225,11 +223,11 @@ All benchmark suites automatically generate and cache a **200 MiB** (`200.01 MiB
 
 ```bash
 npm run build                    # Compile TypeScript to ./dist
-npm test                         # Run Jasmine test suite (168 specs)
-npm run benchmark                # Benchmark.Suite on 200 MiB JSON (Piffero vs Oboe vs @streamparser/json vs jsonpath-plus)
-npm run benchmark:compare        # 9-scenario 200 MiB comparison (Piffero vs Oboe vs @streamparser/json vs jsonpath-plus)
-npm run benchmark:streaming      # 7-scenario 200 MiB comparison (Piffero vs @sapientpro/json-stream vs stream-json vs json-web-streams)
-npm run benchmark:bfj            # 5-scenario 200 MiB comparison (Piffero vs bfj)
+npm test                         # Run Jasmine test suite (187 specs)
+npm run benchmark                # Benchmark.Suite on 200 MiB JSON (piffero-plus vs Oboe vs @streamparser/json vs jsonpath-plus)
+npm run benchmark:compare        # 9-scenario 200 MiB comparison (piffero-plus vs Oboe vs @streamparser/json vs jsonpath-plus)
+npm run benchmark:streaming      # 7-scenario 200 MiB comparison (piffero-plus vs @sapientpro/json-stream vs stream-json vs json-web-streams)
+npm run benchmark:bfj            # 5-scenario 200 MiB comparison (piffero-plus vs bfj)
 npm run benchmark:200mb          # 15-scenario 200 MiB scale comparison across all 7 libraries
 npm run benchmark:filters        # ConditionEval RFC 9535 filter microbenchmark (200k ops/case)
 ```
@@ -240,7 +238,7 @@ Benchmarks run on the **200 MiB** GitHub events dataset (`200.01 MiB` / `209.72 
 
 ### Summary (200 MiB JSON)
 
-| Workload | Best Piffero | Key Comparison |
+| Workload | Best `piffero-plus` | Key Comparison |
 |---|---|---|
 | **Early-exit index (`$.[1].payload`)** | **0.45 ms** (`string`) | **#1 overall**: ahead of `@sapientpro/json-stream` (`0.73 ms`), `@streamparser/json` (`1.09 ms`), **~7.9x** vs `bfj` (`4.36 ms`), **~10x** vs `stream-json` (`4.48 ms`), **~21x** vs `Oboe` (`9.48 ms`), **~7,336x** vs `jsonpath-plus` (`3301.31 ms`); `json-web-streams` unsupported |
 | **Mid / End-of-file lookup (`$.[31341]` / `$.[56754]`)** | **601.17 ms** / **1052.55 ms** (`string`) | **#1 overall**: ahead of `@sapientpro/json-stream` (`626.28` / `1121.61 ms`), `jsonpath-plus` (`2061.89` / `1765.17 ms`), `@streamparser/json` (`1711.00` / `3171.93 ms`), `stream-json` (`2214.46` / `4103.15 ms`), `Oboe` (`3230.70` / `4118.41 ms`), and **~52.8x** vs `bfj` |
@@ -253,17 +251,17 @@ Benchmarks run on the **200 MiB** GitHub events dataset (`200.01 MiB` / `209.72 
 
 ### Full Reports & Documentation
 
-- [Why Choose Piffero: Architecture, RFC 9535 & Performance Advantages](./docs/advantages.md)
+- [Why Choose `piffero-plus`: Architecture, RFC 9535 & Performance Advantages](./docs/advantages.md)
 - [200 MiB Scale Comparison (15 Scenarios across 7 Libraries)](./docs/benchmarks/scale-200mb.md)
 - [Full 8-Library Feature & JSONPath Compatibility Matrix](./docs/benchmarks/feature-matrix.md)
 - [Streaming Parsers Comparison (`@sapientpro/json-stream`, `stream-json`, `json-web-streams`)](./docs/benchmarks/streaming-parsers.md)
 - [Extended 9-Scenario Comparison (`Oboe`, `@streamparser/json`, `jsonpath-plus`)](./docs/benchmarks/general-comparison.md)
-- [`Piffero vs bfj` Comparison](./docs/benchmarks/bfj-comparison.md)
+- [`piffero-plus` vs `bfj` Comparison](./docs/benchmarks/bfj-comparison.md)
 
 ## Other tools
-* Piffero is built on [Clarinet](https://github.com/dscape/clarinet)
+* `piffero-plus` is built on [Clarinet](https://github.com/dscape/clarinet)
 * Compared libraries: [@sapientpro/json-stream](https://www.npmjs.com/package/@sapientpro/json-stream) · [stream-json](https://www.npmjs.com/package/stream-json) · [json-web-streams](https://www.npmjs.com/package/json-web-streams) · [@streamparser/json](https://www.npmjs.com/package/@streamparser/json) · [Oboe](https://github.com/jimhigson/oboe.js) · [bfj](https://www.npmjs.com/package/bfj) · [jsonpath-plus](https://www.npmjs.com/package/jsonpath-plus)
 * You can also try [JSONPath Online Evaluator](https://jsonpath.com/)
 
-enjoy Piffero!!
+enjoy `piffero-plus`!!
 

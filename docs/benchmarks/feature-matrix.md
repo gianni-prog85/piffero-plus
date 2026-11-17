@@ -1,8 +1,8 @@
 # Feature & JSONPath Compatibility Matrix
 
-Side-by-side comparison across all 8 tested libraries (`Piffero`, `@sapientpro/json-stream`, `stream-json`, `json-web-streams`, `@streamparser/json`, `Oboe`, `bfj`, and `jsonpath-plus`).
+Side-by-side comparison across all 8 tested libraries (`piffero-plus`, `@sapientpro/json-stream`, `stream-json`, `json-web-streams`, `@streamparser/json`, `Oboe`, `bfj`, and `jsonpath-plus`).
 
-| Capability | Piffero | `@sapientpro/json-stream` | `stream-json` | `json-web-streams` | `@streamparser/json` | Oboe | `bfj` | `jsonpath-plus` |
+| Capability | `piffero-plus` | `@sapientpro/json-stream` | `stream-json` | `json-web-streams` | `@streamparser/json` | Oboe | `bfj` | `jsonpath-plus` |
 |---|---|---|---|---|---|---|---|---|
 | **Streaming (larger than RAM)** | ✅ | ✅ | ✅ | ✅ (Web Streams) | ✅ | ✅ | ✅ | ❌ (full `JSON.parse` in RAM) |
 | **Zero runtime dependencies** | ✅ | ✅ | ❌ (`stream-chain`) | ❌ (`jsonpath-rfc9535`, `@standard-schema/spec`) | ✅ | ✅ | ❌ | ❌ |

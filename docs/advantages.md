@@ -1,6 +1,6 @@
-# Why Choose Piffero: Architecture, Capabilities & Performance Advantages
+# Why Choose `piffero-plus`: Architecture, Capabilities & Performance Advantages
 
-Piffero combines a **zero-dependency streaming SAX architecture** with **RFC 9535 JSONPath compliance**—closing the gap between fast but limited streaming path matchers and feature-rich in-memory evaluators that require loading the entire JSON document into RAM.
+`piffero-plus` combines a **zero-dependency streaming SAX architecture** with **RFC 9535 JSONPath compliance**—closing the gap between fast but limited streaming path matchers and feature-rich in-memory evaluators that require loading the entire JSON document into RAM.
 
 All measurements below come from reproducible suites in [`benchmarking/`](../benchmarking/) on a **200.01 MiB** (**209.72 MB**, **62,683** GitHub event records) dataset and are compared against 7 libraries (`@sapientpro/json-stream`, `json-web-streams`, `stream-json`, `@streamparser/json`, `Oboe`, `bfj`, and `jsonpath-plus`).
 
@@ -8,7 +8,7 @@ All measurements below come from reproducible suites in [`benchmarking/`](../ben
 
 ## 1. Streaming Architecture & Bounded Memory
 
-| Advantage | How Piffero Works | Concrete Benefit |
+| Advantage | How `piffero-plus` Works | Concrete Benefit |
 |---|---|---|
 | **Larger-than-RAM processing** | Incremental `CStream` tokenizer (TypeScript Clarinet port) + [`StreamingPathEngine`](../src/handler/jsonpathEngine.ts) process chunks sequentially without buffering the whole input file. | Evaluates arbitrary-size JSON payloads in bounded V8 heap; avoids `JSON.parse()` out-of-memory failures and GC pauses. |
 | **Automatic early stream termination** | Computes `rootMaxIndex` at query compile-time for deterministic point lookups (`$.[1].payload`), positive bounded slices (`$[0:10:2]`), and bounded unions (`$[2,0,2,1:3].id`), calling `destroy()`/`unpipe()` immediately once satisfied. | Extracts early records from 200 MiB in **0.45 ms** (`$.[1].payload`), **1.24 ms** (`$[0:10:2]`), and **0.48 ms** (`$[2,0,2,1:3].id`)—**~1,697x–7,336x** faster than in-memory `jsonpath-plus` without manual abort boilerplate. |
@@ -19,10 +19,10 @@ All measurements below come from reproducible suites in [`benchmarking/`](../ben
 
 ## 2. Internal Speed Optimizations
 
-Piffero avoids unnecessary work at every stage of parsing and evaluation:
+`piffero-plus` avoids unnecessary work at every stage of parsing and evaluation:
 
 - **`skipDecode` on skipped subtrees**: When the engine descends into branches that cannot match the current query steps (`skipDepth > 0`) and no active filter requires their fields, string UTF-8/escape decoding is bypassed completely.
-- **`PrunedJsBuilder` for filter queries**: For filter selectors followed by downstream steps (e.g., `$[?@.payload.issue].payload.issue.number`), Piffero statically analyzes the AST + remaining path steps (`buildFilterProjection`) and materializes **only** the referenced fields, skipping large unrelated payloads inside every candidate object.
+- **`PrunedJsBuilder` for filter queries**: For filter selectors followed by downstream steps (e.g., `$[?@.payload.issue].payload.issue.number`), `piffero-plus` statically analyzes the AST + remaining path steps (`buildFilterProjection`) and materializes **only** the referenced fields, skipping large unrelated payloads inside every candidate object.
 - **O(1) & Ring-Buffer Slice/Script Evaluation**:
   - Positive forward slices (`$[0:10:2]`), ordered positive index lists (`$[0, 2]`), and static scripts (`[(1+1)]`) stream in O(1) per element with zero array buffering.
   - Reverse slices (`$[10:0:-1]`, `$[-2:]`) and `@.length - k` scripts (`[(@.length-1)]`) keep only an O(*k*) ring buffer instead of collecting the entire array.
@@ -35,9 +35,9 @@ Piffero avoids unnecessary work at every stage of parsing and evaluation:
 
 ## 3. RFC 9535 Standard Compliance (Unique Among Streaming Parsers)
 
-Most streaming JSONPath libraries only support static child paths, wildcards, or simple `id`-style unions. Piffero implements full RFC 9535 semantics natively on streams:
+Most streaming JSONPath libraries only support static child paths, wildcards, or simple `id`-style unions. `piffero-plus` implements full RFC 9535 semantics natively on streams:
 
-| RFC 9535 Feature | Piffero | Other Streaming Parsers | In-Memory `jsonpath-plus` |
+| RFC 9535 Feature | `piffero-plus` | Other Streaming Parsers | In-Memory `jsonpath-plus` |
 |---|---|---|---|
 | **Parenless & parenthesized filters** (`?[?@.a]`, `?(@.a)`) | ✅ Full AST support | ❌ Unsupported (`Oboe` supports only `{prop}` duck-typing) | ❌ `?[...]` silently returns `[]` |
 | **Existence vs falsy values** (`?@.v` with `false`, `0`, `""`, `null`) | ✅ Distinguishes present values from missing `NOTHING` | ❌ N/A | ❌ JS truthiness drops falsy values |
@@ -60,7 +60,7 @@ Most streaming JSONPath libraries only support static child paths, wildcards, or
 - **Fail-fast & typed error separation**:
   - Invalid JSONPath expressions synchronously throw `PifferoJsonPathError` before touching the stream.
   - Malformed JSON inputs wrap into `PifferoError` and propagate cleanly across `'error'` stream events, callbacks, and Promise rejections.
-- **Preserves `null` values**: Unlike parsers such as `bfj` (where `null` elements can act as EOF markers and disappear), Piffero preserves JSON `null` accurately everywhere.
+- **Preserves `null` values**: Unlike parsers such as `bfj` (where `null` elements can act as EOF markers and disappear), `piffero-plus` preserves JSON `null` accurately everywhere.
 
 ---
 
@@ -82,4 +82,4 @@ See also:
 - [8-Library Feature Compatibility Matrix](./benchmarks/feature-matrix.md)
 - [Streaming Parsers Comparison](./benchmarks/streaming-parsers.md)
 - [General Comparison](./benchmarks/general-comparison.md)
-- [Piffero vs bfj](./benchmarks/bfj-comparison.md)
+- [`piffero-plus` vs `bfj`](./benchmarks/bfj-comparison.md)

@@ -1,10 +1,10 @@
-# Piffero Roadmap
+# piffero-plus Roadmap
 
-Questo documento definisce la roadmap evolutiva di **Piffero**, il parser JSON SAX-like basato su stream con supporto JSONPath.
+Questo documento definisce la roadmap evolutiva di **piffero-plus** (continuazione di `piffero`), il parser JSON SAX-like basato su stream con supporto JSONPath.
 
 ---
 
-## Stato attuale (`v1.1.13`)
+## Stato attuale (pubblicato come `piffero-plus@1.0.0`, base `v1.1.13`)
 - Parsing incrementale via `CStream` (porting TypeScript di Clarinet).
 - API pubblica: `Piffero.findByPath`, `Piffero.findAsString`, `Piffero.findAsPromise`.
 - Supporto JSONPath base: `$`, `.`, `[index]`, `[i,j]`, `[start:end:step]`, filtri di uguaglianza semplici `[?(@.prop===val)]`.

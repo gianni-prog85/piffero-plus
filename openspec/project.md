@@ -1,7 +1,7 @@
-# Project Context: Piffero
+# Project Context: piffero-plus
 
 ## Purpose
-Piffero è una libreria TypeScript/Node.js per il parsing streaming di file JSON di grandi dimensioni (anche superiori alla RAM disponibile) tramite espressioni JSONPath, con approccio SAX-like a eventi.
+`piffero-plus` è una libreria TypeScript/Node.js per il parsing streaming di file JSON di grandi dimensioni (anche superiori alla RAM disponibile) tramite espressioni JSONPath, con approccio SAX-like a eventi.
 
 ## Tech Stack
 - **Language**: TypeScript (`tsconfig.json`) compilato in `./dist`
@@ -21,6 +21,6 @@ Piffero è una libreria TypeScript/Node.js per il parsing streaming di file JSON
 - `src/libs/clarinet/cstream.ts`: parser JSON a stati che trasforma un `Writable` stream in eventi SAX.
 
 ## Conventions
-- L'output prodotto da Piffero è sempre un array JSON valido (`[...]`), sia in modalità stream che stringa/Promise.
+- L'output prodotto da `piffero-plus` è sempre un array JSON valido (`[...]`), sia in modalità stream che stringa/Promise.
 - I test devono verificare che l'output sia JSON valido (`JSON.parse`) e corrispondente ai risultati attesi in `spec/piffero/`.
 - Per query non-bulk (singolo elemento/percorso deterministico), lo stream sorgente viene distrutto non appena il match è completato (`checkStreams()`).

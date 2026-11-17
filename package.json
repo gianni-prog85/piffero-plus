@@ -1,7 +1,7 @@
 {
-  "name": "piffero",
-  "version": "1.1.13",
-  "description": "",
+  "name": "piffero-plus",
+  "version": "1.0.0",
+  "description": "The ultimate streaming JSONPath parser for Node.js",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
@@ -30,25 +30,28 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/gfiorentino/piffero.git"
+    "url": "git+https://github.com/gianni-prog85/piffero-plus.git"
   },
   "keywords": [
     "json",
     "sax",
     "jsonpath",
+    "rfc9535",
     "parser",
     "stream",
     "progressive",
     "event",
     "emitter",
-    "async"
+    "async",
+    "piffero",
+    "piffero-plus"
   ],
   "author": "Giovanni Fiorentino",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/gfiorentino/piffero/issues"
+    "url": "https://github.com/gianni-prog85/piffero-plus/issues"
   },
-  "homepage": "https://github.com/gfiorentino/piffero#readme",
+  "homepage": "https://github.com/gianni-prog85/piffero-plus#readme",
   "devDependencies": {
     "@sapientpro/json-stream": "^3.0.0",
     "@streamparser/json": "^0.0.26",

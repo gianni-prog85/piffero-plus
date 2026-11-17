@@ -9,7 +9,7 @@ npm run benchmark:filters   # ConditionEval RFC 9535 microbenchmark
 
 ## Benchmark Results (200 MiB JSON, avg ms)
 
-| Scenario (matches extracted) | Piffero (stream) | Piffero (string) | `@sapientpro/json-stream` | `json-web-streams` | `stream-json` | `@streamparser/json` | `Oboe` | `jsonpath-plus` (in-memory) |
+| Scenario (matches extracted) | `piffero-plus` (stream) | `piffero-plus` (string) | `@sapientpro/json-stream` | `json-web-streams` | `stream-json` | `@streamparser/json` | `Oboe` | `jsonpath-plus` (in-memory) |
 |---|---|---|---|---|---|---|---|---|
 | **1. Early file** `$.[1].payload` (1) | 1.65 ms | **0.45 ms** | 0.73 ms | N/A | 4.48 ms | 1.09 ms | 9.48 ms | 3301.31 ms |
 | **2. Mid file** `$.[31341].payload` (1) | 639.93 ms | **601.17 ms** | 626.28 ms | N/A | 2214.46 ms | 1711.00 ms | 3230.70 ms | 2061.89 ms |
@@ -44,7 +44,7 @@ Single-threaded CPU throughput over 200,000 pre-compiled AST evaluations ([`benc
 
 ## Key Takeaways
 
-- **#1 overall on every point lookup and slice**: `Piffero (string)` beats every tested library—including in-memory `jsonpath-plus`—at start-of-file (**0.45 ms** vs `3301.31 ms`, **~7,336x**), mid-file (**601.17 ms** vs `2061.89 ms`, **~3.4x**), end-of-file (**1052.55 ms** vs `1765.17 ms`, **~1.7x**; and ahead of `@sapientpro/json-stream` at `1121.61 ms`), forward slice `$[0:10:2]` (**1.24 ms** vs `2104.39 ms`, **~1,697x**), and reverse slice `$[10:0:-1]` (**1054.89 ms** vs `1840.44 ms`, **~1.7x**; all other streaming parsers lack RFC 9535 slice support).
+- **#1 overall on every point lookup and slice**: `piffero-plus (string)` beats every tested library—including in-memory `jsonpath-plus`—at start-of-file (**0.45 ms** vs `3301.31 ms`, **~7,336x**), mid-file (**601.17 ms** vs `2061.89 ms`, **~3.4x**), end-of-file (**1052.55 ms** vs `1765.17 ms`, **~1.7x**; and ahead of `@sapientpro/json-stream` at `1121.61 ms`), forward slice `$[0:10:2]` (**1.24 ms** vs `2104.39 ms`, **~1,697x**), and reverse slice `$[10:0:-1]` (**1054.89 ms** vs `1840.44 ms`, **~1.7x**; all other streaming parsers lack RFC 9535 slice support).
 - **#1 overall on heterogeneous unions & selector-ordered key unions**:
   - `$[2,0,2,1:3].id` (mixed reordered index + duplicate + slice): **0.48 ms** (`string`) / **1.42 ms** (`stream`) vs `jsonpath-plus` `1482.23 ms` (**~3,088x** faster via bounded `rootMaxIndex` early-exit); all other streaming parsers lack heterogeneous unions.
   - `$[*]['type','id']` (125,366 matches, preserving RFC 9535 selector order `type` before `id`): **1374.04 ms** (`string`) / **1387.07 ms** (`stream`), **~1.57x** faster than `jsonpath-plus` (`2153.09 ms`), **~2.59x** faster than `@streamparser/json` (`3562.81 ms`), and **~4.17x** faster than `stream-json` (`5724.10 ms`)—and the only streaming parser preserving selector order instead of document key order.
@@ -53,4 +53,4 @@ Single-threaded CPU throughput over 200,000 pre-compiled AST evaluations ([`benc
   - `$..user.login`: **2602.03 ms** (faster than `@sapientpro/json-stream` `3138.20 ms`, `Oboe` `4518.88 ms`, and `stream-json` `5488.51 ms`).
   - `$[?@.payload.issue].payload.issue.number` (RFC 9535 without parentheses): **1590.25 ms** (**~2.8x** faster than `Oboe` duck-typing at `4502.94 ms`), while `jsonpath-plus` silently returns `[]` and `json-web-streams` throws `Unsupported node: FilterSelector`.
   - `$[?(@.type == "IssuesEvent")].id`: **1460.66 ms** vs `jsonpath-plus` `1866.99 ms` (**~1.28x** faster, bounded RAM), and `$[?(@.payload.issue.number > 1000)].payload.issue.number` succeeds in **1610.40 ms** via `NOTHING` propagation whereas `jsonpath-plus` throws `TypeError`.
-- **Consistent bounded-memory scaling**: Scaling 5.35x from 38 MB to 200 MiB keeps Piffero's throughput linear while avoiding full-document V8 heap allocation.
+- **Consistent bounded-memory scaling**: Scaling 5.35x from 38 MB to 200 MiB keeps `piffero-plus` throughput linear while avoiding full-document V8 heap allocation.
