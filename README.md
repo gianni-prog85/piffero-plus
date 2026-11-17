@@ -1,6 +1,6 @@
-# PIFFERO-PLUS  [![NPM version](https://img.shields.io/npm/v/piffero-plus.svg)](https://www.npmjs.com/package/piffero-plus)
+# PIFFERO-PLUS  [![NPM version](https://img.shields.io/npm/v/piffero-plus.svg)](https://www.npmjs.com/package/piffero-plus) [![CI](https://github.com/gianni-prog85/piffero-plus/actions/workflows/ci.yml/badge.svg)](https://github.com/gianni-prog85/piffero-plus/actions/workflows/ci.yml)
 
-The ultimate streaming JSONPath parser for Node.js.
+Zero-dependency streaming RFC 9535 JSONPath parser for large JSON files and Node.js `Readable` streams.
 
 `piffero-plus` is an open-source SAX-like parser (evolved from `piffero`) that operates directly on Node.js `Readable` streams to extract parts of huge JSON files without loading the entire document into memory.
 
@@ -110,7 +110,7 @@ npm install piffero-plus
   - the second `err` argument of the callback (`findAsString`),
   - Promise rejection (`findAsPromise`).
 
-> Note: The top-level package exports `{ Piffero }`. For `instanceof` checks, you can import `PifferoError` and `PifferoJsonPathError` from `piffero-plus/dist/src/handler/mastehandler`, or check `err.constructor.name`. Always attach an `'error'` listener to your source `Readable` stream when using `findByPath` (see [API Reference](./docs/api-reference.md#error-types--handling)).
+> Tip: `Piffero`, `PifferoError`, and `PifferoJsonPathError` are all exported directly from `'piffero-plus'` for `instanceof` checks. Always attach an `'error'` listener to your source `Readable` stream when using `findByPath` (see [API Reference](./docs/api-reference.md#error-types--handling)).
 
 ---
 

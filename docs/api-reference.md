@@ -1,6 +1,6 @@
 # API Reference
 
-`piffero-plus` exports the `Piffero` class as its public entry point ([`index.ts`](../index.ts), [`src/piffero.ts`](../src/piffero.ts)) and ships bundled TypeScript declarations (`dist/index.d.ts`).
+`piffero-plus` exports `Piffero`, `PifferoError`, and `PifferoJsonPathError` as its public entry point ([`index.ts`](../index.ts), [`src/piffero.ts`](../src/piffero.ts)) and ships bundled TypeScript declarations (`dist/index.d.ts`).
 
 ---
 
@@ -13,13 +13,13 @@ npm install piffero-plus
 **CommonJS:**
 
 ```js
-const { Piffero } = require("piffero-plus");
+const { Piffero, PifferoError, PifferoJsonPathError } = require("piffero-plus");
 ```
 
 **TypeScript / ESM interop:**
 
 ```ts
-import { Piffero } from "piffero-plus";
+import { Piffero, PifferoError, PifferoJsonPathError } from "piffero-plus";
 ```
 
 ---
@@ -172,7 +172,7 @@ async function getActiveEmployeeNames(filePath: string): Promise<string[]> {
 | `PifferoJsonPathError` | Invalid JSONPath syntax (not starting with `$`, unclosed brackets/quotes, invalid I-JSON integer, unknown function or invalid argument type, malformed filter/script expression) | **Thrown synchronously** by `findByPath`, `findAsString`, and `findAsPromise` before reading the stream |
 | `PifferoError` | Malformed JSON input detected by `CStream` (e.g., unexpected EOF, invalid number/token, trailing characters) | Emitted on `'error'` (`findByPath`), passed as 2nd callback argument (`findAsString`), or rejects the Promise (`findAsPromise`) |
 
-> **Importing error classes:** The top-level package entry ([`index.ts`](../index.ts)) exports `{ Piffero }`. If you need `instanceof` checks against `PifferoJsonPathError` or `PifferoError`, you can inspect `err.name` / `err.constructor.name` or import them from `piffero-plus/dist/src/handler/mastehandler` (TypeScript source: [`src/handler/mastehandler.ts`](../src/handler/mastehandler.ts)).
+> **Importing error classes:** Both `PifferoJsonPathError` and `PifferoError` are exported directly from `'piffero-plus'` ([`index.ts`](../index.ts)) for `instanceof` checks.
 
 ### Validating JSONPath Early in HTTP Endpoints
 
