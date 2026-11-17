@@ -46,6 +46,7 @@ Most streaming JSONPath libraries only support static child paths, wildcards, or
 | **Complete slices (`[start:end:step]`, negative step, `step = 0`)** | ✅ Official RFC 9535 `Bounds` algorithm | ❌ Unsupported (`throws`) | ✅ Supported (in-memory only) |
 | **Heterogeneous unions & order/duplicates** (`$[2, 0, 2]`, `$[0, 2:4, *]`, `$['b', 'a', 'b']`) | ✅ Mixed selectors, whitespace-safe, preserves selector order & duplicates | ❌ Key/index only, document order, no duplicates | ⚠️ Breaks with spaces (`$[2, 0, 2]`), drops key in key+filter union |
 | **Full queries in filters & root `$` refs** (`?(@..price > 10)`, `?(@.tags[*])`, `$.maxPrice`) | ✅ Precompiled sub-queries, pruned `$` projection, deferred candidate queue | ❌ Unsupported | ✅ Requires full JSON in RAM |
+| **RFC 9535 standard functions** (`length()`, `count()`, `match()`, `search()`, `value()`) | ✅ Compile-time type checks + cached RFC 9485 I-Regexp | ❌ Unsupported | ❌ Non-standard / missing |
 | **Unicode `\uXXXX`, surrogates, I-JSON bounds, strict shorthand** | ✅ Compile-time validation and UTF-16 surrogate decoding | ⚠️ Partial (`sapientpro`/`json-web-streams` only escapes) | ❌ No `\uXXXX` decode in brackets or I-JSON range checks |
 
 ---
@@ -78,6 +79,9 @@ Most streaming JSONPath libraries only support static child paths, wildcards, or
 - **RFC 9535 filters (`$..`, `?@`, `==`, `>`)**: **1460–1610 ms** over 200 MiB with bounded RAM, beating in-memory `jsonpath-plus` (`1866.99 ms`) on equality filters and succeeding where `jsonpath-plus` silently returns `[]` or throws `TypeError`.
 
 See also:
+- [API Reference](./api-reference.md)
+- [JSONPath Syntax & RFC 9535 Semantics Guide](./jsonpath-guide.md)
+- [Internal Architecture & Performance Engineering](./architecture.md)
 - [Full 200 MiB Scale Benchmark](./benchmarks/scale-200mb.md)
 - [8-Library Feature Compatibility Matrix](./benchmarks/feature-matrix.md)
 - [Streaming Parsers Comparison](./benchmarks/streaming-parsers.md)
