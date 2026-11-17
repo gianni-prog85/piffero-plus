@@ -26,7 +26,8 @@
     "benchmark:bfj": "npm run build && node benchmarking/compare-bfj.js",
     "benchmark:streaming": "npm run build && node benchmarking/compare-streaming.js",
     "benchmark:200mb": "npm run build && node benchmarking/compare-200mb.js",
-    "benchmark:filters": "npm run build && node benchmarking/bench-conditioneval.js"
+    "benchmark:filters": "npm run build && node benchmarking/bench-conditioneval.js",
+    "benchmark:legacy": "npm run build && node benchmarking/compare-piffero-npm.js"
   },
   "repository": {
     "type": "git",
@@ -73,6 +74,7 @@
     "jsonpath-plus": "^11.3.0",
     "nodemon": "^2.0.15",
     "nyc": "^15.1.0",
+    "piffero": "^1.1.13",
     "prettier": "^2.5.1",
     "stream-json": "^3.9.0",
     "ts-loader": "^9.2.6",
