@@ -78,6 +78,20 @@ Most streaming JSONPath libraries only support static child paths, wildcards, or
 - **Selective nested wildcards (`$[*].payload.commits[*].author.email`, 55,729 matches)**: **1611.00 ms** (**#1 overall** across all 7 libraries).
 - **RFC 9535 filters (`$..`, `?@`, `==`, `>`)**: **1460–1610 ms** over 200 MiB with bounded RAM, beating in-memory `jsonpath-plus` (`1866.99 ms`) on equality filters and succeeding where `jsonpath-plus` silently returns `[]` or throws `TypeError`.
 
+---
+
+## 6. Head-to-Head: `piffero-plus` vs `jsonpath-plus`
+
+`jsonpath-plus` is a widely used in-memory JSONPath evaluator, whereas `piffero-plus` evaluates JSONPath directly over Node.js streams:
+
+- **Memory & File Size Limits**: `jsonpath-plus` requires `JSON.parse()` on the entire payload in V8 heap before running a query (failing with OOM on files larger than available RAM). `piffero-plus` streams with bounded memory and zero runtime dependencies.
+- **Speed on 200 MiB JSON**:
+  - `piffero-plus` is **~7,336x faster** on early-file lookups (`0.45 ms` vs `3301.31 ms`), **~3,088x faster** on bounded heterogeneous unions (`0.48 ms` vs `1482.23 ms`), **~1,697x faster** on bounded forward slices (`1.24 ms` vs `2104.39 ms`), **~3.4x faster** on mid-file lookups (`601.17 ms` vs `2061.89 ms`), **~1.7x faster** on end-of-file lookups (`1052.55 ms` vs `1765.17 ms`) and reverse slices (`1054.89 ms` vs `1840.44 ms`), **~1.57x faster** on key unions (`1374.04 ms` vs `2153.09 ms`), and **~1.28x faster** on equality filters (`1460.66 ms` vs `1866.99 ms`).
+  - Conversely, when the entire 200 MiB JSON fits in RAM and every record must be visited (`$[*]` at `2049.36 ms` vs `3346.97 ms`, `$..user.login` at `1826.14 ms` vs `2602.03 ms`, Goessner `$[?(@.payload.issue)]...` at `1568.55 ms` vs `1714.03 ms`), `jsonpath-plus` is faster on raw traversal once parsed.
+- **RFC 9535 Correctness**:
+  - `piffero-plus` evaluates parenless filters (`$[?@.payload.issue]`), propagates `NOTHING` safely when intermediate properties are missing, distinguishes falsy values (`false`, `0`, `""`, `null`) from missing keys, avoids JS `==` type coercion, handles whitespace and mixed selectors in unions (`$[2, 0, 2]`), decodes `\uXXXX` escapes in brackets, and implements all 5 RFC 9535 functions (`length`, `count`, `match`, `search`, `value`).
+  - In the same scenarios, `jsonpath-plus` silently returns `[]` on `$[?@.payload.issue]`, throws `TypeError` on missing intermediate paths (`@.payload.issue.number > 1000`), coerces `"1" == 1`, breaks on spaces in `$[2, 0, 2]`, and drops keys in mixed key+filter unions.
+
 See also:
 - [API Reference](./api-reference.md)
 - [JSONPath Syntax & RFC 9535 Semantics Guide](./jsonpath-guide.md)

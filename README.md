@@ -347,6 +347,22 @@ Benchmarks run on the **200 MiB** GitHub events dataset (`200.01 MiB` / `209.72 
 | **Recursive descent (`$..user.login`)** | **2602.03 ms** (`string`) | **Fastest streaming parser**: faster than `@sapientpro/json-stream` (`3138.20 ms`), `Oboe` (`4518.88 ms`), `stream-json` (`5488.51 ms`), and **~22.8x** vs `bfj` (`$..login`); `@streamparser/json` & `json-web-streams` unsupported |
 | **RFC 9535 filters (`?[...]`, `==`, `NOTHING`-safe `>`)** | **1460.66–1610.40 ms** | **Only streaming library with full RFC 9535 filters**: **~1.28x** faster than `jsonpath-plus` on `$[?(@.type == "IssuesEvent")].id` (`1460.66 ms` vs `1866.99 ms`), **~2.8x** faster than `Oboe` on `$[?@.payload.issue]`, and safely handles missing paths where `jsonpath-plus` throws `TypeError` |
 
+### `piffero-plus` vs `jsonpath-plus`
+
+If you are coming from `jsonpath-plus` (in-memory), here is how `piffero-plus` compares on large payloads and RFC 9535 queries:
+
+| Dimension | `piffero-plus` | `jsonpath-plus` |
+|---|---|---|
+| **Memory model** | Bounded-RAM Node.js streaming (handles files larger than RAM, zero runtime dependencies) | Requires full `JSON.parse()` of the entire document in V8 heap before querying |
+| **Point lookups, slices & unions (200 MiB)** | **0.45 ms** (`$.[1].payload`), **1.24 ms** (`$[0:10:2]`), **0.48 ms** (`$[2,0,2,1:3].id`), **601.17 ms** (`$.[31341]`), **1052.55 ms** (`$.[56754]`) | **3301.31 ms**, **2104.39 ms**, **1482.23 ms**, **2061.89 ms**, **1765.17 ms** (**~1.7x–7,336x slower**) |
+| **Key unions & equality filters (200 MiB)** | **1374.04 ms** (`$[*]['type','id']`), **1460.66 ms** (`$[?(@.type == "IssuesEvent")].id`) | **2153.09 ms** (**~1.57x slower**), **1866.99 ms** (**~1.28x slower**) |
+| **Full-document in-RAM scans (`$[*]`, `$..user.login`)** | **3346.97 ms** (`$[*]`), **2602.03 ms** (`$..user.login`) with bounded memory | **2049.36 ms** (`$[*]`), **1826.14 ms** (`$..user.login`) when the entire JSON fits in RAM |
+| **RFC 9535 parenless filters (`$[?@.payload.issue]`)** | ✅ Full support (**1590.25 ms** on 200 MiB) | ❌ Silently returns `[]` |
+| **Missing intermediate properties (`@.a.b.c > 1000`)** | ✅ Safe `NOTHING` propagation (**1610.40 ms** on 200 MiB) | ❌ Throws `TypeError` |
+| **Existence & `==` semantics** | ✅ Falsy-safe (`false`/`0`/`""`/`null`) + non-coercing `==` (`"1" != 1`) | ❌ JS truthiness & `==` coercion (`"1" == 1`) |
+| **Unions with spaces & mixed selectors** | ✅ `$[2, 0, 2]`, `$['name', ?@.active]` preserve order & duplicates | ⚠️ Breaks on spaces (`$[2, 0, 2]`), drops key in key+filter union |
+| **Standard functions & `\uXXXX` escapes** | ✅ `length()`, `count()`, `match()`, `search()`, `value()`, `\uXXXX`, I-JSON bounds | ❌ Non-standard / no `\uXXXX` decode in brackets |
+
 ---
 
 ## Full Documentation & Reports
