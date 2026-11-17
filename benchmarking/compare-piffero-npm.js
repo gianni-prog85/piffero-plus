@@ -344,6 +344,16 @@ async function main() {
     },
   ];
 
+  const plusFirst = process.argv.includes("--plus-first");
+  const engineOrder = plusFirst ? ["plus", "legacy"] : ["legacy", "plus"];
+  console.log(
+    `Execution order: ${
+      plusFirst
+        ? "piffero-plus@1.0.0 first -> legacy piffero@1.1.13 second"
+        : "legacy piffero@1.1.13 first -> piffero-plus@1.0.0 second"
+    }`
+  );
+
   const filterArgIdx = process.argv.indexOf("--filter");
   const filterRegex =
     filterArgIdx !== -1 && process.argv[filterArgIdx + 1]
@@ -355,12 +365,11 @@ async function main() {
 
   const summary = [];
   for (const c of activeCases) {
-    const rows = [
-      runIsolated("plus", "stream", c.plusPath, c.runs),
-      runIsolated("plus", "string", c.plusPath, c.runs),
-      runIsolated("legacy", "stream", c.legacyPath, c.runs),
-      runIsolated("legacy", "string", c.legacyPath, c.runs),
-    ];
+    const rows = [];
+    for (const eng of engineOrder) {
+      rows.push(runIsolated(eng, "stream", eng === "plus" ? c.plusPath : c.legacyPath, c.runs));
+      rows.push(runIsolated(eng, "string", eng === "plus" ? c.plusPath : c.legacyPath, c.runs));
+    }
 
     console.log(`\n=== ${c.name} ===`);
     console.table(rows);
