@@ -779,6 +779,43 @@ function formatResultPayload(
   }
 }
 
+/**
+ * Evaluates precompiled `steps` directly against an in-memory JavaScript value
+ * using full RFC 9535 semantics without JSON serialization round-trips.
+ */
+export function evaluateInMemory(
+  val: any,
+  steps: JsonPathStep[],
+  resultType: ResultType = "value"
+): any[] {
+  if (steps.length === 0) {
+    if (resultType === "path") return ["$"];
+    if (resultType === "pointer") return [""];
+    if (resultType === "all") return [{ path: "$", pointer: "", value: val }];
+    return [val];
+  }
+  if (resultType === "value") {
+    return evaluateStepsOnValue(val, steps, 0, val);
+  }
+  const matched = evaluateStepsWithPaths(val, steps, 0, val, []);
+  const out: any[] = new Array(matched.length);
+  for (let i = 0; i < matched.length; i++) {
+    const m = matched[i];
+    if (resultType === "path") {
+      out[i] = formatNormalizedPath(m.path);
+    } else if (resultType === "pointer") {
+      out[i] = formatJsonPointer(m.path);
+    } else {
+      out[i] = {
+        path: formatNormalizedPath(m.path),
+        pointer: formatJsonPointer(m.path),
+        value: m.value,
+      };
+    }
+  }
+  return out;
+}
+
 export function evaluateStepsOnValue(
   val: any,
   steps: JsonPathStep[],

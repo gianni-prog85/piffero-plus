@@ -250,6 +250,77 @@ export class MasterHandler implements SaxHandler {
     }
   }
 
+  parseSync(
+    data: string | Buffer | Uint8Array,
+    parsedPath: ParsedPath,
+    options?: { resultType?: "value" | "path" | "pointer" | "all" }
+  ): string {
+    let syncResult = "[]";
+    let syncError: any = null;
+    this.callback = (res, err) => {
+      syncResult = res;
+      syncError = err;
+    };
+    this.useString = true;
+    const resultType = (options && options.resultType) || "value";
+    const buf =
+      typeof data === "string"
+        ? Buffer.from(data, "utf8")
+        : Buffer.isBuffer(data)
+        ? data
+        : Buffer.from(data.buffer, data.byteOffset, data.byteLength);
+
+    if (
+      (parsedPath.needsStreamingEngine || resultType !== "value") &&
+      parsedPath.steps
+    ) {
+      this.streamingEngine = new StreamingPathEngine(
+        parsedPath.steps,
+        (chunk: string) => this.pushEngineOutput(chunk),
+        () => {
+          this.cStream.destroy();
+        },
+        resultType
+      );
+      this.streamingEngine.onend = () => this.onend();
+      this.streamingEngine.onclose = () => this.onclose();
+      this.streamingEngine.onerror = (er: any) => this.onerror(er);
+      this.cStream = new CStream(this.streamingEngine);
+    } else {
+      const singleStepHandler = new SingleStepHandler(
+        parsedPath,
+        undefined,
+        undefined,
+        true,
+        false
+      );
+      this.stepHandlers.push(singleStepHandler);
+      while (parsedPath.next && !parsedPath.hascondtion) {
+        parsedPath = parsedPath.next;
+        const stepHandler = new SingleStepHandler(
+          parsedPath,
+          undefined,
+          undefined,
+          true,
+          false
+        );
+        this.stepHandlers.push(stepHandler);
+      }
+      this.currentHandler = this.stepHandlers[this.handlerIndex];
+      this.shiftParser();
+      this.updateLegacySkipDecode();
+      this.cStream = new CStream(this);
+    }
+
+    this.cStream.write(buf);
+    this.cStream.end();
+
+    if (syncError) {
+      throw syncError;
+    }
+    return syncResult;
+  }
+
   private pushEngineOutput(value: string) {
     if (this.useString) {
       this.engineStringBuffer.push(value);
@@ -298,8 +369,10 @@ export class MasterHandler implements SaxHandler {
     }
     if (this.currentHandler.status.end && this.currentHandler.isLast) {
       this.cStream.destroy();
-      this.stream.unpipe();
-      this.stream.destroy();
+      if (this.stream) {
+        this.stream.unpipe();
+        this.stream.destroy();
+      }
     }
   }
 
