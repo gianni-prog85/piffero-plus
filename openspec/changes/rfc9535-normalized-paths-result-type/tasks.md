@@ -7,4 +7,4 @@
 - [x] Ottimizzare il caso `resultType === "path" | "pointer"` in `StreamingPathEngine` per emettere subito il percorso sul match finale senza istanziare `JsonValueCollector` sul sottoalbero del valore (preservando `skipDecode`).
 - [x] Supportare `options?: PifferoQueryOptions` anche nel fast-path `SingleStepHandler` (`src/handler/mastehandler.ts`) o instradare su `StreamingPathEngine` quando `resultType !== "value"`.
 - [x] Aggiungere unit test in `spec/piffero/` per verificare `resultType: "path"`, `"pointer"` e `"all"` (inclusi caratteri speciali/controllo RFC 9535 §2.7, slice negativi, unioni eterogenee, recursive descent `..` e filtri) e confrontare la parità con `jsonpath-plus`.
-- [ ] Verificare con i benchmark su 200 MiB che `resultType: "value"` (default) non introduca alcuna regressione di throughput o memoria.
+- [x] Verificare con i benchmark su 200 MiB che `resultType: "value"` (default) non introduca alcuna regressione di throughput o memoria.

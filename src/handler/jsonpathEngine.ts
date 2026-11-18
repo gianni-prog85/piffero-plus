@@ -3324,7 +3324,7 @@ export class StreamingPathEngine implements SaxHandler {
       this.skipDepth--;
       if (this.skipDecode && this.activeFilters.length === 0) {
         this.feedRootCloseObject();
-        if (this.rootReady) {
+        if (!this.needsRootValue || this.rootReady) {
           this.flushPendingSlots();
         }
         if (this.skipDepth === 0) {
@@ -3517,7 +3517,7 @@ export class StreamingPathEngine implements SaxHandler {
       this.skipDepth--;
       if (this.skipDecode && this.activeFilters.length === 0) {
         this.feedRootCloseArray();
-        if (this.rootReady) {
+        if (!this.needsRootValue || this.rootReady) {
           this.flushPendingSlots();
         }
         if (this.skipDepth === 0) {
