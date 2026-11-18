@@ -47,12 +47,15 @@ describe("CLI (runCli) & Dual ESM/CJS Packaging", function () {
 
     const c2 = createCaptureBuffers();
     const code2 = await runCli(
-      ["$.phoneNumbers[*].type", TEST_JSON_FILE, "--pretty"],
+      ["$.phoneNumbers[*].number", TEST_JSON_FILE, "--pretty"],
       c2.io
     );
     expect(code2).toBe(0);
-    expect(c2.getStdout()).toContain("\n  \"iPhone\"");
-    expect(JSON.parse(c2.getStdout())).toEqual(["iPhone", "home"]);
+    expect(c2.getStdout()).toContain('\n  "0123-4567-8888"');
+    expect(JSON.parse(c2.getStdout())).toEqual([
+      "0123-4567-8888",
+      "0123-4567-8910",
+    ]);
   });
 
   it("supports stdin streaming and --path / --pointer / --all / -r options", async function () {
