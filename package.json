@@ -26,7 +26,8 @@
     "benchmark:bfj": "npm run build && node benchmarking/compare-bfj.js",
     "benchmark:streaming": "npm run build && node benchmarking/compare-streaming.js",
     "benchmark:200mb": "npm run build && node benchmarking/compare-200mb.js",
-    "benchmark:filters": "npm run build && node benchmarking/bench-conditioneval.js"
+    "benchmark:filters": "npm run build && node benchmarking/bench-conditioneval.js",
+    "benchmark:phase5": "npm run build && node --expose-gc benchmarking/compare-phase5.js"
   },
   "repository": {
     "type": "git",
