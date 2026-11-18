@@ -42,7 +42,7 @@ Allineamento alle specifiche JSONPath complete descritte nel `README.md` (OpenSp
 ## Fase 3 — Modernizzazione, DX & CI (v1.4.0)
 - [ ] Migrazione da `tslint` (deprecato) a `eslint` + `@typescript-eslint`.
 - [ ] Supporto dual-package ESM / CommonJS e aggiornamento target TypeScript / `@types/node`.
-- [ ] Migrazione CI da Travis CI (`.travis.yml`) a GitHub Actions (test, coverage, benchmark regression check).
+- [x] Migrazione CI da Travis CI (`.travis.yml`) a GitHub Actions (`.github/workflows/ci.yml`).
 - [x] Aggiornamento del `README.md` per allineare la tabella delle feature effettivamente supportate.
 
 ---
@@ -66,4 +66,33 @@ Ordine di implementazione consigliato (per dipendenze e impatto):
    - Compilazione una-tantum delle sub-query e `rootProjection` potata in `StreamingPathEngine` per evitare il caricamento dell'intera root in RAM quando si usa `$...`.
 7. [x] **#19 — Funzioni standard RFC 9535 (`length`, `count`, `match`, `search`, `value`)** ([OpenSpec](./openspec/changes/rfc9535-standard-functions/proposal.md))
    - Precompilazione I-Regexp a compile-time per `match`/`search`, fast-path ASCII O(1) per `length()` e tracciamento argomenti in `PrunedJsBuilder`.
+
+---
+
+## Fase 5 — Output Estesi RFC 9535 & Input Universale (Oltre `jsonpath-plus`)
+Estensione dell'API per coprire gli ultimi scenari d'uso in cui gli sviluppatori ricorrono a `jsonpath-plus`, mantenendo zero dipendenze, memoria `O(depth)` in streaming e zero regressioni sui fast-path esistenti.
+
+1. [ ] **Normalized Paths RFC 9535 (§2.7) e Modalità di Output (`resultType`)** ([OpenSpec](./openspec/changes/rfc9535-normalized-paths-result-type/proposal.md))
+   - **Obiettivo**: Permettere a `piffero-plus` di restituire non solo i valori estratti (`value`, default), ma anche i **Normalized Paths** definiti da [RFC 9535 §2.7](https://www.rfc-editor.org/rfc/rfc9535#section-2.7) (es. `$['employees'][0]['phoneNumbers'][1]['number']`), i **JSON Pointer** (RFC 6901, es. `/employees/0/phoneNumbers/1/number`), oppure oggetti combinati `{ path, pointer, value }` (`resultType: 'value' | 'path' | 'pointer' | 'all'`).
+   - **Perché ha senso**:
+     - Completa la conformità alla sezione 2.7 di RFC 9535 (che standardizza la forma canonica dei percorsi con singoli apici `['...']`, escape minimi `\b \f \n \r \t \' \\ \u00XX` e indici interi non negativi `[i]`).
+     - Consente casi d'uso di auditing, indicizzazione di file JSON giganti, localizzazione precisa dei match e migrazione immediata da `jsonpath-plus` (`resultType`).
+   - **Design & Vincoli di Performance**:
+     - **Zero overhead quando `resultType === 'value'` (default)**: nessuna concatenazione di stringhe di path deve avvenire se non richiesta dalle opzioni.
+     - **Memoria `O(depth)` in streaming**: `StreamingPathEngine` mantiene già lo stack dei frame (`frameStack`) con la chiave corrente (per gli oggetti) o `elementIndex` (per gli array). Il Normalized Path va formattato **lazy** solo nell'istante in cui un nodo fa match (o viene catturato in un `PendingSlot`), evitando allocazioni sui rami scartati.
+     - **Compatibilità early-exit & `skipDecode`**: quando `resultType` è `'path'` o `'pointer'` su un match che non richiede l'estrazione del sottoalbero del valore (es. un oggetto o array matchato), il motore può emettere subito il percorso normalizzato e saltare la serializzazione del valore con `skipDecode`.
+
+2. [ ] **Input Universale (Node `Readable`, Web `ReadableStream`, `string` / `Buffer` e Oggetti JS in-memory)** ([OpenSpec](./openspec/changes/universal-input-sources/proposal.md))
+   - **Obiettivo**: Permettere a `piffero-plus` di interrogare con la stessa API e la stessa semantica RFC 9535 qualsiasi sorgente dati:
+     1. **Node.js `Readable`** (file stream, socket, `zlib`, pipeline Node).
+     2. **WHATWG Web `ReadableStream`** (es. `fetch(url).then(res => res.body)` nativo in Node 18–24, Deno, Bun ed Edge runtime), convertito internamente tramite `Readable.fromWeb()` o lettore di chunk `Uint8Array`.
+     3. **`string` / `Buffer` / `Uint8Array`** (payload JSON già in memoria ma non ancora deserializzati, processabili via `CParser.writeBuffer` senza passare per l'overhead degli eventi di `Readable` o `JSON.parse()` completo).
+     4. **Oggetti / Array JavaScript già parsati in memoria** (valutati direttamente tramite `evaluateStepsOnValue()` già presente in [`src/handler/jsonpathEngine.ts`](./src/handler/jsonpathEngine.ts)).
+   - **Perché ha senso**:
+     - Elimina la necessità di installare due librerie diverse (`piffero-plus` per gli stream grandi e `jsonpath-plus` per gli oggetti in RAM o le risposte `fetch()`).
+     - Sulle risposte HTTP streaming (`fetch`), poter passare direttamente `response.body` riduce il codice utente a una sola riga.
+     - Sugli oggetti JS già in memoria, il riutilizzo diretto di `tokenizeJsonPath()` + `evaluateStepsOnValue()` (con cache AST in `ConditionEval`) evita qualsiasi serializzazione intermedia e offre tutte le garanzie RFC 9535 di `piffero-plus` (`NOTHING`, filtri senza parentesi, funzioni standard, unioni ordinate) anche in-memory.
+   - **Design & API proposta**:
+     - Estendere gli input accettati da `findByPath`, `findAsString`, `findAsPromise` (o introdurre un metodo sincrono/universale `Piffero.query(input, jsonPath, options?)` per oggetti JS e buffer in-memory) mantenendo il 100% di retrocompatibilità con le firme esistenti.
+
 
