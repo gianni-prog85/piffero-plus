@@ -170,11 +170,13 @@ export class MasterHandler implements SaxHandler {
     parsedPath: ParsedPath,
     useString = false,
     callback?: (result, error?) => void,
-    isBulk: boolean = false
+    isBulk: boolean = false,
+    options?: { resultType?: "value" | "path" | "pointer" | "all" }
   ): Stream {
     this.callback = callback;
     this.stream = stream as Readable;
     this.useString = useString;
+    const resultType = (options && options.resultType) || "value";
     this.output = new Readable({
       read: () => {
         if (this.stream && this.stream.isPaused()) {
@@ -183,7 +185,10 @@ export class MasterHandler implements SaxHandler {
       },
     });
 
-    if (parsedPath.needsStreamingEngine && parsedPath.steps) {
+    if (
+      (parsedPath.needsStreamingEngine || resultType !== "value") &&
+      parsedPath.steps
+    ) {
       this.streamingEngine = new StreamingPathEngine(
         parsedPath.steps,
         (chunk: string) => this.pushEngineOutput(chunk),
@@ -191,7 +196,8 @@ export class MasterHandler implements SaxHandler {
           this.cStream.destroy();
           this.stream.unpipe();
           this.stream.destroy();
-        }
+        },
+        resultType
       );
       this.streamingEngine.onend = () => this.onend();
       this.streamingEngine.onclose = () => this.onclose();

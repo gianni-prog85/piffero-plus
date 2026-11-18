@@ -667,6 +667,118 @@ function resolveSliceBounds(
   };
 }
 
+export type ResultType = "value" | "path" | "pointer" | "all";
+
+function escapeNormalizedKey(key: string): string {
+  let needsEscape = false;
+  for (let i = 0; i < key.length; i++) {
+    const code = key.charCodeAt(i);
+    if (code < 0x20 || code === 0x27 || code === 0x5c) {
+      needsEscape = true;
+      break;
+    }
+  }
+  if (!needsEscape) {
+    return key;
+  }
+  let out = "";
+  for (let i = 0; i < key.length; i++) {
+    const code = key.charCodeAt(i);
+    switch (code) {
+      case 0x08:
+        out += "\\b";
+        break;
+      case 0x09:
+        out += "\\t";
+        break;
+      case 0x0a:
+        out += "\\n";
+        break;
+      case 0x0c:
+        out += "\\f";
+        break;
+      case 0x0d:
+        out += "\\r";
+        break;
+      case 0x27:
+        out += "\\'";
+        break;
+      case 0x5c:
+        out += "\\\\";
+        break;
+      default:
+        if (code < 0x20) {
+          out += "\\u00" + code.toString(16).padStart(2, "0");
+        } else {
+          out += key[i];
+        }
+        break;
+    }
+  }
+  return out;
+}
+
+/**
+ * Formats path segments as a canonical RFC 9535 §2.7 Normalized Path
+ * (e.g. `$['employees'][0]['name']`).
+ */
+export function formatNormalizedPath(
+  segments: ReadonlyArray<string | number>
+): string {
+  let out = "$";
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i];
+    if (typeof seg === "number") {
+      out += `[${seg}]`;
+    } else {
+      out += `['${escapeNormalizedKey(seg)}']`;
+    }
+  }
+  return out;
+}
+
+/**
+ * Formats path segments as an RFC 6901 JSON Pointer
+ * (e.g. `/employees/0/name`, or `""` for the root document).
+ */
+export function formatJsonPointer(
+  segments: ReadonlyArray<string | number>
+): string {
+  if (segments.length === 0) {
+    return "";
+  }
+  let out = "";
+  for (let i = 0; i < segments.length; i++) {
+    const raw = String(segments[i]);
+    if (raw.indexOf("~") === -1 && raw.indexOf("/") === -1) {
+      out += "/" + raw;
+    } else {
+      out += "/" + raw.replace(/~/g, "~0").replace(/\//g, "~1");
+    }
+  }
+  return out;
+}
+
+function formatResultPayload(
+  resultType: ResultType,
+  segments: ReadonlyArray<string | number>,
+  rawValueJson?: string
+): string {
+  switch (resultType) {
+    case "path":
+      return JSON.stringify(formatNormalizedPath(segments));
+    case "pointer":
+      return JSON.stringify(formatJsonPointer(segments));
+    case "all": {
+      const pathJson = JSON.stringify(formatNormalizedPath(segments));
+      const ptrJson = JSON.stringify(formatJsonPointer(segments));
+      return `{"path":${pathJson},"pointer":${ptrJson},"value":${rawValueJson}}`;
+    }
+    default:
+      return rawValueJson as string;
+  }
+}
+
 export function evaluateStepsOnValue(
   val: any,
   steps: JsonPathStep[],
@@ -837,6 +949,290 @@ function evaluateSingleStepOnValue(
             steps,
             nextIndex,
             rootValue
+          )
+        );
+      }
+      break;
+    }
+  }
+  return results;
+}
+
+export interface EvaluatedPathResult {
+  value: any;
+  path: Array<string | number>;
+}
+
+export function evaluateStepsWithPaths(
+  val: any,
+  steps: JsonPathStep[],
+  stepIndex: number,
+  rootValue: any,
+  basePath: Array<string | number>
+): EvaluatedPathResult[] {
+  if (stepIndex >= steps.length) {
+    return [{ value: val, path: basePath }];
+  }
+  const step = steps[stepIndex];
+  const results: EvaluatedPathResult[] = [];
+
+  if (step.recursive) {
+    const nonRecStep: JsonPathStep = { ...step, recursive: false };
+    results.push(
+      ...evaluateSingleStepWithPaths(
+        val,
+        nonRecStep,
+        steps,
+        stepIndex + 1,
+        rootValue,
+        basePath
+      )
+    );
+    if (val !== null && typeof val === "object") {
+      if (Array.isArray(val)) {
+        for (let i = 0; i < val.length; i++) {
+          results.push(
+            ...evaluateStepsWithPaths(
+              val[i],
+              steps,
+              stepIndex,
+              rootValue,
+              [...basePath, i]
+            )
+          );
+        }
+      } else {
+        const keys = Object.keys(val);
+        for (let i = 0; i < keys.length; i++) {
+          const k = keys[i];
+          results.push(
+            ...evaluateStepsWithPaths(
+              val[k],
+              steps,
+              stepIndex,
+              rootValue,
+              [...basePath, k]
+            )
+          );
+        }
+      }
+    }
+    return results;
+  }
+
+  return evaluateSingleStepWithPaths(
+    val,
+    step,
+    steps,
+    stepIndex + 1,
+    rootValue,
+    basePath
+  );
+}
+
+function evaluateSingleStepWithPaths(
+  val: any,
+  step: JsonPathStep,
+  steps: JsonPathStep[],
+  nextIndex: number,
+  rootValue: any,
+  basePath: Array<string | number>
+): EvaluatedPathResult[] {
+  const results: EvaluatedPathResult[] = [];
+  if (val === null || val === undefined || typeof val !== "object") {
+    return results;
+  }
+
+  switch (step.kind) {
+    case "child": {
+      if (!Array.isArray(val) && Object.prototype.hasOwnProperty.call(val, step.key)) {
+        results.push(
+          ...evaluateStepsWithPaths(
+            val[step.key],
+            steps,
+            nextIndex,
+            rootValue,
+            [...basePath, step.key]
+          )
+        );
+      }
+      break;
+    }
+    case "unionKeys": {
+      if (!Array.isArray(val)) {
+        for (let i = 0; i < step.orderedKeys.length; i++) {
+          const k = step.orderedKeys[i];
+          if (Object.prototype.hasOwnProperty.call(val, k)) {
+            results.push(
+              ...evaluateStepsWithPaths(
+                val[k],
+                steps,
+                nextIndex,
+                rootValue,
+                [...basePath, k]
+              )
+            );
+          }
+        }
+      }
+      break;
+    }
+    case "wildcard": {
+      if (Array.isArray(val)) {
+        for (let i = 0; i < val.length; i++) {
+          results.push(
+            ...evaluateStepsWithPaths(
+              val[i],
+              steps,
+              nextIndex,
+              rootValue,
+              [...basePath, i]
+            )
+          );
+        }
+      } else {
+        const keys = Object.keys(val);
+        for (let i = 0; i < keys.length; i++) {
+          const k = keys[i];
+          results.push(
+            ...evaluateStepsWithPaths(
+              val[k],
+              steps,
+              nextIndex,
+              rootValue,
+              [...basePath, k]
+            )
+          );
+        }
+      }
+      break;
+    }
+    case "index": {
+      if (Array.isArray(val)) {
+        for (let i = 0; i < step.rawIndexes.length; i++) {
+          const rawIdx = step.rawIndexes[i];
+          const resolved = rawIdx < 0 ? val.length + rawIdx : rawIdx;
+          if (resolved >= 0 && resolved < val.length) {
+            results.push(
+              ...evaluateStepsWithPaths(
+                val[resolved],
+                steps,
+                nextIndex,
+                rootValue,
+                [...basePath, resolved]
+              )
+            );
+          }
+        }
+      }
+      break;
+    }
+    case "slice": {
+      if (Array.isArray(val) && step.step !== 0) {
+        const { lower, upper } = resolveSliceBounds(
+          val.length,
+          step.start,
+          step.end,
+          step.step
+        );
+        if (step.step > 0) {
+          for (let i = lower; i < upper; i += step.step) {
+            results.push(
+              ...evaluateStepsWithPaths(
+                val[i],
+                steps,
+                nextIndex,
+                rootValue,
+                [...basePath, i]
+              )
+            );
+          }
+        } else {
+          for (let i = upper; i > lower; i += step.step) {
+            results.push(
+              ...evaluateStepsWithPaths(
+                val[i],
+                steps,
+                nextIndex,
+                rootValue,
+                [...basePath, i]
+              )
+            );
+          }
+        }
+      }
+      break;
+    }
+    case "filter": {
+      if (Array.isArray(val)) {
+        for (let i = 0; i < val.length; i++) {
+          if (ConditionEval.evalFilterAst(step.ast, val[i], rootValue)) {
+            results.push(
+              ...evaluateStepsWithPaths(
+                val[i],
+                steps,
+                nextIndex,
+                rootValue,
+                [...basePath, i]
+              )
+            );
+          }
+        }
+      } else {
+        const keys = Object.keys(val);
+        for (let i = 0; i < keys.length; i++) {
+          const k = keys[i];
+          const child = val[k];
+          if (ConditionEval.evalFilterAst(step.ast, child, rootValue)) {
+            results.push(
+              ...evaluateStepsWithPaths(
+                child,
+                steps,
+                nextIndex,
+                rootValue,
+                [...basePath, k]
+              )
+            );
+          }
+        }
+      }
+      break;
+    }
+    case "script": {
+      if (Array.isArray(val)) {
+        const computed =
+          step.staticIndex !== undefined
+            ? step.staticIndex
+            : ConditionEval.evalAst(step.ast, val, rootValue);
+        if (
+          typeof computed === "number" &&
+          Number.isInteger(computed) &&
+          computed >= 0 &&
+          computed < val.length
+        ) {
+          results.push(
+            ...evaluateStepsWithPaths(
+              val[computed],
+              steps,
+              nextIndex,
+              rootValue,
+              [...basePath, computed]
+            )
+          );
+        }
+      }
+      break;
+    }
+    case "union": {
+      for (let i = 0; i < step.selectors.length; i++) {
+        results.push(
+          ...evaluateSingleStepWithPaths(
+            val,
+            step.selectors[i],
+            steps,
+            nextIndex,
+            rootValue,
+            basePath
           )
         );
       }
@@ -1545,6 +1941,7 @@ interface PendingSlot {
 interface ActiveCapture {
   slot: PendingSlot;
   collector: JsonValueCollector;
+  pathSegments?: Array<string | number>;
 }
 
 interface ActiveFilter {
@@ -1553,6 +1950,7 @@ interface ActiveFilter {
   builder: PrunedJsBuilder | null;
   step: Extract<JsonPathStep, { kind: "filter" }>;
   nextStepIndex: number;
+  basePath?: Array<string | number>;
 }
 
 interface ActiveArrayCollector {
@@ -1566,6 +1964,7 @@ interface ActiveArrayCollector {
   totalCount: number;
   elements: string[];
   currentElementCollector: JsonValueCollector | null;
+  basePath?: Array<string | number>;
 }
 
 interface ActiveBranch {
@@ -1585,6 +1984,7 @@ interface Frame {
   depth: number;
   activeBranches: ActiveBranch[];
   elementIndex: number;
+  currentKey?: string;
   pendingChildBranches: ActiveBranch[];
   arrayCollectors: ActiveArrayCollector[];
   unionGroups: ActiveUnionGroup[];
@@ -1643,6 +2043,7 @@ type DeferredRootItem =
       nextStepIndex: number;
       parsed: any;
       raw: string;
+      basePath?: Array<string | number>;
     }
   | {
       kind: "arrayCollector";
@@ -1670,6 +2071,8 @@ export class StreamingPathEngine implements SaxHandler {
   private rootBuilder: PrunedJsBuilder | null = null;
   private rootCollector: JsonValueCollector | null = null;
   private deferredRootFilters: DeferredRootItem[] = [];
+  private trackPaths: boolean;
+  private rootQueryHandled = false;
 
   skipDecode = false;
   onend: () => void = () => {};
@@ -1679,8 +2082,10 @@ export class StreamingPathEngine implements SaxHandler {
   constructor(
     private steps: JsonPathStep[],
     private emitOutput: (chunk: string) => void,
-    private onEarlyExit?: () => void
+    private onEarlyExit?: () => void,
+    private resultType: ResultType = "value"
   ) {
+    this.trackPaths = resultType !== "value";
     if (steps.length > 0) {
       this.rootPendingBranches = [{ stepIdx: 0 }];
       this.needsRootValue = this.collectStepsRootUsage(steps);
@@ -1862,7 +2267,30 @@ export class StreamingPathEngine implements SaxHandler {
       } else if (item.kind === "scalarFilter") {
         if (ConditionEval.evalFilterAst(item.step.ast, item.parsed, this.rootValue)) {
           if (item.nextStepIndex >= this.steps.length) {
-            item.slot.results.push(item.raw);
+            if (this.trackPaths) {
+              item.slot.results.push(
+                formatResultPayload(this.resultType, item.basePath!, item.raw)
+              );
+            } else {
+              item.slot.results.push(item.raw);
+            }
+          } else if (this.trackPaths) {
+            const matched = evaluateStepsWithPaths(
+              item.parsed,
+              this.steps,
+              item.nextStepIndex,
+              this.rootValue,
+              item.basePath!
+            );
+            for (let k = 0; k < matched.length; k++) {
+              item.slot.results.push(
+                formatResultPayload(
+                  this.resultType,
+                  matched[k].path,
+                  JSON.stringify(matched[k].value)
+                )
+              );
+            }
           } else {
             const matched = evaluateStepsOnValue(
               item.parsed,
@@ -2029,7 +2457,46 @@ export class StreamingPathEngine implements SaxHandler {
     }
   }
 
-  private startDirectCapture(targetSlot?: PendingSlot): ActiveCapture {
+  private getCurrentPathSnapshot(): Array<string | number> {
+    const path: Array<string | number> = [];
+    for (let i = 0; i < this.frameStack.length; i++) {
+      const f = this.frameStack[i];
+      if (f.type === "object") {
+        if (f.currentKey !== undefined) {
+          path.push(f.currentKey);
+        }
+      } else if (f.elementIndex >= 0) {
+        path.push(f.elementIndex);
+      }
+    }
+    return path;
+  }
+
+  private startDirectCapture(
+    targetSlot?: PendingSlot,
+    pathOverride?: Array<string | number>
+  ): ActiveCapture | null {
+    if (this.trackPaths) {
+      const pathSegments = pathOverride || this.getCurrentPathSnapshot();
+      if (this.resultType === "path" || this.resultType === "pointer") {
+        const formatted = formatResultPayload(this.resultType, pathSegments);
+        const slot = this.createSlot(true, targetSlot);
+        if (slot.streaming) {
+          this.emitResultString(formatted);
+        } else {
+          slot.results.push(formatted);
+        }
+        slot.done = true;
+        return null;
+      }
+      // resultType === "all": buffer raw value JSON, then wrap {path, pointer, value}
+      const slot = this.createSlot(false, targetSlot);
+      const collector = new JsonValueCollector();
+      const cap: ActiveCapture = { slot, collector, pathSegments };
+      this.activeCaptures.push(cap);
+      return cap;
+    }
+
     const slot = this.createSlot(true, targetSlot);
     let startedComma = false;
     const collector = new JsonValueCollector(
@@ -2064,6 +2531,7 @@ export class StreamingPathEngine implements SaxHandler {
       builder: proj ? new PrunedJsBuilder(proj) : null,
       step,
       nextStepIndex,
+      basePath: this.trackPaths ? this.getCurrentPathSnapshot() : undefined,
     };
     this.activeFilters.push(filter);
     return filter;
@@ -2072,14 +2540,44 @@ export class StreamingPathEngine implements SaxHandler {
   private finalizeCapture(cap: ActiveCapture) {
     cap.slot.done = true;
     if (!cap.slot.streaming) {
-      cap.slot.results.push(cap.collector.chunks.join(""));
+      const raw = cap.collector.chunks.join("");
+      if (this.trackPaths) {
+        cap.slot.results.push(
+          formatResultPayload(this.resultType, cap.pathSegments!, raw)
+        );
+      } else {
+        cap.slot.results.push(raw);
+      }
     }
   }
 
   private applyFilterEvaluation(flt: ActiveFilter, parsed: any, raw?: string) {
     if (ConditionEval.evalFilterAst(flt.step.ast, parsed, this.rootValue)) {
       if (flt.nextStepIndex >= this.steps.length && raw !== undefined) {
-        flt.slot.results.push(raw);
+        if (this.trackPaths) {
+          flt.slot.results.push(
+            formatResultPayload(this.resultType, flt.basePath!, raw)
+          );
+        } else {
+          flt.slot.results.push(raw);
+        }
+      } else if (this.trackPaths) {
+        const matched = evaluateStepsWithPaths(
+          parsed,
+          this.steps,
+          flt.nextStepIndex,
+          this.rootValue,
+          flt.basePath!
+        );
+        for (let i = 0; i < matched.length; i++) {
+          flt.slot.results.push(
+            formatResultPayload(
+              this.resultType,
+              matched[i].path,
+              JSON.stringify(matched[i].value)
+            )
+          );
+        }
       } else {
         const matched = evaluateStepsOnValue(
           parsed,
@@ -2171,6 +2669,7 @@ export class StreamingPathEngine implements SaxHandler {
       totalCount: 0,
       elements: [],
       currentElementCollector: null,
+      basePath: this.trackPaths ? this.getCurrentPathSnapshot() : undefined,
     });
   }
 
@@ -2220,23 +2719,53 @@ export class StreamingPathEngine implements SaxHandler {
     const baseOffset =
       ac.tailKeep !== null ? Math.max(0, length - ac.tailKeep) : 0;
     for (let i = 0; i < matchedIndexes.length; i++) {
-      const arrIdx = matchedIndexes[i] - baseOffset;
+      const resolvedIdx = matchedIndexes[i];
+      const arrIdx = resolvedIdx - baseOffset;
       if (arrIdx < 0 || arrIdx >= ac.elements.length) {
         continue;
       }
       const rawEl = ac.elements[arrIdx];
       if (ac.nextStepIndex >= this.steps.length) {
-        ac.slot.results.push(rawEl);
+        if (this.trackPaths) {
+          ac.slot.results.push(
+            formatResultPayload(
+              this.resultType,
+              [...ac.basePath!, resolvedIdx],
+              rawEl
+            )
+          );
+        } else {
+          ac.slot.results.push(rawEl);
+        }
       } else {
         const parsedEl = JSON.parse(rawEl);
-        const sub = evaluateStepsOnValue(
-          parsedEl,
-          this.steps,
-          ac.nextStepIndex,
-          this.rootValue
-        );
-        for (let j = 0; j < sub.length; j++) {
-          ac.slot.results.push(JSON.stringify(sub[j]));
+        if (this.trackPaths) {
+          const sub = evaluateStepsWithPaths(
+            parsedEl,
+            this.steps,
+            ac.nextStepIndex,
+            this.rootValue,
+            [...ac.basePath!, resolvedIdx]
+          );
+          for (let j = 0; j < sub.length; j++) {
+            ac.slot.results.push(
+              formatResultPayload(
+                this.resultType,
+                sub[j].path,
+                JSON.stringify(sub[j].value)
+              )
+            );
+          }
+        } else {
+          const sub = evaluateStepsOnValue(
+            parsedEl,
+            this.steps,
+            ac.nextStepIndex,
+            this.rootValue
+          );
+          for (let j = 0; j < sub.length; j++) {
+            ac.slot.results.push(JSON.stringify(sub[j]));
+          }
         }
       }
     }
@@ -2315,6 +2844,9 @@ export class StreamingPathEngine implements SaxHandler {
     }
 
     const keyStr = unquoteJsonString(keyNode);
+    if (this.trackPaths) {
+      frame.currentKey = keyStr;
+    }
 
     for (let g = 0; g < frame.unionGroups.length; g++) {
       const grp = frame.unionGroups[g];
@@ -2460,10 +2992,40 @@ export class StreamingPathEngine implements SaxHandler {
                 nextStepIndex: nextIdx,
                 parsed,
                 raw: scalarNode,
+                basePath: this.trackPaths
+                  ? this.getCurrentPathSnapshot()
+                  : undefined,
               });
             } else if (ConditionEval.evalFilterAst(sel.ast, parsed, this.rootValue)) {
               if (nextIdx >= this.steps.length) {
-                slot.results.push(scalarNode);
+                if (this.trackPaths) {
+                  slot.results.push(
+                    formatResultPayload(
+                      this.resultType,
+                      this.getCurrentPathSnapshot(),
+                      scalarNode
+                    )
+                  );
+                } else {
+                  slot.results.push(scalarNode);
+                }
+              } else if (this.trackPaths) {
+                const sub = evaluateStepsWithPaths(
+                  parsed,
+                  this.steps,
+                  nextIdx,
+                  this.rootValue,
+                  this.getCurrentPathSnapshot()
+                );
+                for (let k = 0; k < sub.length; k++) {
+                  slot.results.push(
+                    formatResultPayload(
+                      this.resultType,
+                      sub[k].path,
+                      JSON.stringify(sub[k].value)
+                    )
+                  );
+                }
               } else {
                 const sub = evaluateStepsOnValue(
                   parsed,
@@ -2484,7 +3046,17 @@ export class StreamingPathEngine implements SaxHandler {
         if (matched) {
           if (nextIdx >= this.steps.length) {
             if (isScalar && scalarNode !== undefined) {
-              slot.results.push(scalarNode);
+              if (this.trackPaths) {
+                slot.results.push(
+                  formatResultPayload(
+                    this.resultType,
+                    this.getCurrentPathSnapshot(),
+                    scalarNode
+                  )
+                );
+              } else {
+                slot.results.push(scalarNode);
+              }
             } else {
               this.startDirectCapture(slot);
             }
@@ -2543,13 +3115,47 @@ export class StreamingPathEngine implements SaxHandler {
               nextStepIndex: stepIdx + 1,
               parsed,
               raw: scalarNode,
+              basePath: this.trackPaths
+                ? this.getCurrentPathSnapshot()
+                : undefined,
             });
           } else if (ConditionEval.evalFilterAst(step.ast, parsed, this.rootValue)) {
             const nextIdx = stepIdx + 1;
             if (nextIdx >= this.steps.length) {
               const slot = this.createSlot(false, targetSlot);
-              slot.results.push(scalarNode);
+              if (this.trackPaths) {
+                slot.results.push(
+                  formatResultPayload(
+                    this.resultType,
+                    this.getCurrentPathSnapshot(),
+                    scalarNode
+                  )
+                );
+              } else {
+                slot.results.push(scalarNode);
+              }
               slot.done = true;
+            } else if (this.trackPaths) {
+              const sub = evaluateStepsWithPaths(
+                parsed,
+                this.steps,
+                nextIdx,
+                this.rootValue,
+                this.getCurrentPathSnapshot()
+              );
+              if (sub.length > 0) {
+                const slot = this.createSlot(false, targetSlot);
+                for (let k = 0; k < sub.length; k++) {
+                  slot.results.push(
+                    formatResultPayload(
+                      this.resultType,
+                      sub[k].path,
+                      JSON.stringify(sub[k].value)
+                    )
+                  );
+                }
+                slot.done = true;
+              }
             } else {
               const sub = evaluateStepsOnValue(
                 parsed,
@@ -2576,10 +3182,17 @@ export class StreamingPathEngine implements SaxHandler {
         if (nextIdx >= this.steps.length) {
           if (isScalar && scalarNode !== undefined) {
             const slot = this.createSlot(true, targetSlot);
+            const payload = this.trackPaths
+              ? formatResultPayload(
+                  this.resultType,
+                  this.getCurrentPathSnapshot(),
+                  scalarNode
+                )
+              : scalarNode;
             if (slot.streaming) {
-              this.emitResultString(scalarNode);
+              this.emitResultString(payload);
             } else {
-              slot.results.push(scalarNode);
+              slot.results.push(payload);
             }
             slot.done = true;
           } else {
@@ -2599,6 +3212,16 @@ export class StreamingPathEngine implements SaxHandler {
   }
 
   onopenobject(keyNode?: string) {
+    if (this.steps.length === 0 && !this.rootQueryHandled && this.trackPaths) {
+      this.rootQueryHandled = true;
+      const cap = this.startDirectCapture(undefined, []);
+      if (cap) {
+        cap.collector.openObject(keyNode);
+      }
+      this.skipDepth = 1;
+      this.updateSkipDecode();
+      return;
+    }
     this.feedRootOpenObject(keyNode);
     if (this.skipDepth > 0) {
       if (!this.skipDecode) {
@@ -2789,6 +3412,16 @@ export class StreamingPathEngine implements SaxHandler {
   }
 
   onopenarray() {
+    if (this.steps.length === 0 && !this.rootQueryHandled && this.trackPaths) {
+      this.rootQueryHandled = true;
+      const cap = this.startDirectCapture(undefined, []);
+      if (cap) {
+        cap.collector.openArray();
+      }
+      this.skipDepth = 1;
+      this.updateSkipDecode();
+      return;
+    }
     this.feedRootOpenArray();
     if (this.skipDepth > 0) {
       if (!this.skipDecode) {
@@ -3022,6 +3655,11 @@ export class StreamingPathEngine implements SaxHandler {
   }
 
   onvalue(valNode: string) {
+    if (this.steps.length === 0 && !this.rootQueryHandled && this.trackPaths) {
+      this.rootQueryHandled = true;
+      this.emitResultString(formatResultPayload(this.resultType, [], valNode));
+      return;
+    }
     if (this.skipDepth > 0) {
       if (this.skipDecode && this.activeFilters.length === 0) {
         this.feedRootValue(valNode);
