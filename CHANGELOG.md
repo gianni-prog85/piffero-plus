@@ -4,7 +4,7 @@ All notable changes to `piffero-plus` are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.1.0] - 2026-11-18
 
 ### Added
 - **Normalized Paths (RFC 9535 §2.7), JSON Pointer (RFC 6901) & `resultType` (`PifferoQueryOptions`)**:
@@ -15,6 +15,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - Extended `findByPath`, `findAsString`, and `findAsPromise` to accept Node.js `Readable` streams, WHATWG Web `ReadableStream` (`fetch().body`, with backpressure and `reader.cancel()` on early stream termination), raw `string` / `Buffer` / `Uint8Array` (via synchronous `MasterHandler.parseSync` fast-path), and in-memory JS objects/arrays (`evaluateInMemory`).
   - Added synchronous `Piffero.query(input, jsonPath?, options?)` returning `any[]` directly for in-memory JS objects/arrays, `string`, `Buffer`, and `Uint8Array`.
   - Exported `PifferoInput`, `WebReadableStreamLike`, `PifferoResultType`, and `PifferoQueryOptions` from package root.
+- **Streaming CLI (`npx piffero-plus` / `piffero`)**:
+  - Added `bin/piffero-plus.js` (`src/cli.ts`) supporting file and `stdin` streaming, `--path`, `--pointer`, `--all`, `-r, --result-type <type>`, and `-p, --pretty`.
+- **Dual ESM / CommonJS Package Exports**:
+  - Added `esm/index.mjs` and `package.json` `exports` map (`import` + `require` + `types`) with `"sideEffects": false`.
 - **Phase 5 Benchmark Suite (`npm run benchmark:phase5`)**:
   - Added `benchmarking/compare-phase5.js` comparing pure in-memory `Piffero.query()` vs `jsonpath-plus`, `resultType: "path"` on 200 MiB JSON, RFC 9535 standard functions on 200 MiB JSON, and Web `ReadableStream` on 200 MiB JSON.
 
