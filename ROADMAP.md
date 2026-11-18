@@ -41,7 +41,7 @@ Allineamento alle specifiche JSONPath complete descritte nel `README.md` (OpenSp
 ---
 
 ## Fase 3 — Modernizzazione, DX & CI (v1.4.0)
-- [ ] Migrazione da `tslint` (deprecato) a `eslint` + `@typescript-eslint`.
+- [x] Migrazione da `tslint` (deprecato) a `eslint` + `@typescript-eslint`.
 - [x] Supporto dual-package ESM / CommonJS (`exports` map, `esm/index.mjs`) e CLI `npx piffero-plus`.
 - [x] Migrazione CI da Travis CI (`.travis.yml`) a GitHub Actions (`.github/workflows/ci.yml`).
 - [x] Aggiornamento del `README.md` per allineare la tabella delle feature effettivamente supportate.

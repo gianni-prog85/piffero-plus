@@ -11,6 +11,10 @@
   "spec_files": [
     "**/*[sS]pec.ts"
   ],
+  "jsLoader": "require",
+  "env": {
+    "forbidDuplicateNames": false
+  },
   "helpers": [
   ] 
 }
