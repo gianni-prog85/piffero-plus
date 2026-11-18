@@ -4,9 +4,9 @@ Questo documento definisce la roadmap evolutiva di **piffero-plus** (continuazio
 
 ---
 
-## Stato attuale (`piffero-plus@1.0.0`, Fasi 1–5 completate)
+## Stato attuale (`piffero-plus@1.1.0`, Fasi 1–5 completate + CLI & Dual ESM/CJS)
 - Parsing incrementale via `CStream` (porting TypeScript di Clarinet con `StringDecoder` e `skipDecode`) e motore `StreamingPathEngine`.
-- API pubblica: `Piffero.findByPath`, `Piffero.findAsString`, `Piffero.findAsPromise`, `Piffero.query`.
+- API pubblica: `Piffero.findByPath`, `Piffero.findAsString`, `Piffero.findAsPromise`, `Piffero.query` + CLI `npx piffero-plus`.
 - Input universale (`PifferoInput`): Node.js `Readable`, WHATWG Web `ReadableStream` (`fetch().body`), `string` / `Buffer` / `Uint8Array`, e oggetti/array JS in-memory.
 - Conformità completa RFC 9535: `$`, `@`, `.`, `..`, `*`, `[index]`, `[start:end:step]`, unioni eterogenee ordinate `[,]`, filtri `?` / `?()` con semantica `NOTHING`, sub-query e riferimenti `$`, funzioni standard (`length`, `count`, `match`, `search`, `value`), espressioni script `()`, e modalità di output `resultType` (`"value" | "path" | "pointer" | "all"` con Normalized Paths §2.7 e JSON Pointer RFC 6901).
 - Interruzione anticipata automatica dello stream (`rootMaxIndex`) per query deterministiche.
@@ -42,7 +42,7 @@ Allineamento alle specifiche JSONPath complete descritte nel `README.md` (OpenSp
 
 ## Fase 3 — Modernizzazione, DX & CI (v1.4.0)
 - [ ] Migrazione da `tslint` (deprecato) a `eslint` + `@typescript-eslint`.
-- [ ] Supporto dual-package ESM / CommonJS e aggiornamento target TypeScript / `@types/node`.
+- [x] Supporto dual-package ESM / CommonJS (`exports` map, `esm/index.mjs`) e CLI `npx piffero-plus`.
 - [x] Migrazione CI da Travis CI (`.travis.yml`) a GitHub Actions (`.github/workflows/ci.yml`).
 - [x] Aggiornamento del `README.md` per allineare la tabella delle feature effettivamente supportate.
 

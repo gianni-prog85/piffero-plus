@@ -1,8 +1,8 @@
-# PIFFERO-PLUS  [![NPM version](https://img.shields.io/npm/v/piffero-plus.svg)](https://www.npmjs.com/package/piffero-plus) [![CI](https://github.com/gianni-prog85/piffero-plus/actions/workflows/ci.yml/badge.svg)](https://github.com/gianni-prog85/piffero-plus/actions/workflows/ci.yml)
+# PIFFERO-PLUS  [![NPM version](https://img.shields.io/npm/v/piffero-plus.svg)](https://www.npmjs.com/package/piffero-plus) [![NPM downloads](https://img.shields.io/npm/dm/piffero-plus.svg)](https://www.npmjs.com/package/piffero-plus) [![CI](https://github.com/gianni-prog85/piffero-plus/actions/workflows/ci.yml/badge.svg)](https://github.com/gianni-prog85/piffero-plus/actions/workflows/ci.yml) [![Zero Dependencies](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](./package.json) [![TypeScript](https://img.shields.io/badge/types-TypeScript-blue.svg)](./index.ts) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-Zero-dependency streaming RFC 9535 JSONPath parser for large JSON files, Node.js `Readable` streams, Web `ReadableStream`s (`fetch`), `string`/`Buffer`, and in-memory JS objects.
+Zero-dependency streaming RFC 9535 JSONPath parser & CLI for large JSON files, Node.js `Readable` streams, Web `ReadableStream`s (`fetch`), `string`/`Buffer`, and in-memory JS objects.
 
-`piffero-plus` is an open-source SAX-like parser (evolved from `piffero`) that operates directly on streams to extract parts of huge JSON files without loading the entire document into memory—while also supporting synchronous in-memory evaluation via `Piffero.query()`.
+`piffero-plus` is an open-source SAX-like parser (evolved from `piffero`) that operates directly on streams to extract parts of huge JSON files without loading the entire document into memory—while also supporting synchronous in-memory evaluation via `Piffero.query()` and instant command-line usage via `npx piffero-plus`.
 
 It processes JSON documents larger than available RAM and returns matched values, [RFC 9535 §2.7 Normalized Paths](https://www.rfc-editor.org/rfc/rfc9535#section-2.7), or [RFC 6901 JSON Pointers](https://www.rfc-editor.org/rfc/rfc6901) as a valid JSON array stream, string, Promise, or JavaScript array—with automatic early stream termination on deterministic queries, full backpressure support, zero runtime dependencies, and full [RFC 9535](https://www.rfc-editor.org/info/rfc9535/) compliance.
 
@@ -16,7 +16,8 @@ It processes JSON documents larger than available RAM and returns matched values
 
 - [Why `piffero-plus`?](#why-piffero-plus)
 - [Supported JSONPath & RFC 9535 Capabilities](#supported-jsonpath--rfc-9535-capabilities)
-- [Installation](#installation)
+- [Installation & CLI (`npx`)](#installation--cli-npx)
+- [1-Line Migration from `jsonpath-plus`](#1-line-migration-from-jsonpath-plus)
 - [API Overview](#api-overview)
 - [Error Handling](#error-handling)
 - [Examples](#examples)
@@ -30,7 +31,7 @@ It processes JSON documents larger than available RAM and returns matched values
 
 ## Why `piffero-plus`?
 
-- **Zero runtime dependencies**: Self-contained (`dependencies: {}`) with bundled TypeScript declarations (`dist/index.d.ts`).
+- **Zero runtime dependencies & Dual ESM/CommonJS**: Self-contained (`dependencies: {}`) with native `import` / `require` support (`exports` map, `"sideEffects": false`) and bundled TypeScript declarations (`dist/index.d.ts`).
 - **Larger-than-RAM streaming**: Parses Node.js `Readable` and WHATWG Web `ReadableStream` (`fetch().body`) token-by-token (`CStream` + `StreamingPathEngine`) without loading the full JSON document or allocating JavaScript objects for unmatched branches.
 - **Universal input sources (`PifferoInput`)**: Query Node.js `Readable`, Web `ReadableStream`, raw `string`/`Buffer`/`Uint8Array` (via zero-stream `parseSync`), or already-parsed JavaScript objects/arrays with the exact same RFC 9535 semantics.
 - **Automatic early stream termination**: Destroys/cancels the upstream Node `Readable` or Web `ReadableStream` immediately once deterministic queries (`$.[1].payload`, `$[0:10:2]`, `$[2,0,2,1:3].id`) finish—delivering **~0.45–1.24 ms** extraction on 200 MiB payloads (up to **~1,697x–7,336x** faster than in-memory `jsonpath-plus` and **~12x–21x** faster than Oboe).
@@ -41,7 +42,7 @@ It processes JSON documents larger than available RAM and returns matched values
   - All 5 RFC 9535 standard functions: `length()`, `count()`, `match()`, `search()`, and `value()` (with RFC 9485 I-Regexp validation & caching).
   - **Output modes (`resultType`)**: Return matched values (`"value"`, default), canonical RFC 9535 §2.7 Normalized Paths (`"path"`, e.g. `"$['employees'][0]['name']"`), RFC 6901 JSON Pointers (`"pointer"`, e.g. `"/employees/0/name"`), or combined `{ path, pointer, value }` objects (`"all"`).
   - `\uXXXX`/UTF-16 surrogate escapes, I-JSON safe integer bounds, `member-name-shorthand` validation, and script expressions (`(@.length-1)`).
-- **Flexible APIs & fail-fast errors**: Choose `findByPath` (Stream), `findAsString` (callback), `findAsPromise` (`async`/`await`), or synchronous `Piffero.query()` (direct `any[]` output, **~3.0x–3.6x faster** than `jsonpath-plus` on in-memory JS objects), with synchronous syntax validation (`PifferoJsonPathError`) and clean malformed-JSON errors (`PifferoError`).
+- **Flexible APIs, CLI & fail-fast errors**: Choose `findByPath` (Stream), `findAsString` (callback), `findAsPromise` (`async`/`await`), synchronous `Piffero.query()` (direct `any[]` output, **~3.0x–3.6x faster** than `jsonpath-plus` on in-memory JS objects), or `npx piffero-plus` from the terminal.
 - **Proven speed**: Ranks #1 across early-file lookups, mid/end-of-file lookups, slices, heterogeneous unions, selective nested wildcards, recursive descent, RFC 9535 filters, and in-memory evaluation against 7 libraries (see [Performance](#performance)).
 
 ---
@@ -82,10 +83,47 @@ It processes JSON documents larger than available RAM and returns matched values
 
 ---
 
-## Installation
+## Installation & CLI (`npx`)
 
 ```bash
 npm install piffero-plus
+```
+
+You can also query multi-gigabyte JSON files or streams directly from your terminal using `npx`:
+
+```bash
+# Extract values from a large JSON file (streams with bounded RAM & early exit)
+npx piffero-plus '$.employees[?@.active == true].name' employees.json
+
+# Output canonical RFC 9535 §2.7 Normalized Paths (--path) or JSON Pointers (--pointer)
+npx piffero-plus '$[0:5].id' huge-200mb.json --path --pretty
+
+# Pipe from stdin / curl / gzip
+curl -s https://example.com/events.json | npx piffero-plus '$[?@.type == "IssuesEvent"].id'
+```
+
+---
+
+## 1-Line Migration from `jsonpath-plus`
+
+`piffero-plus` can replace `jsonpath-plus` both for **in-memory JS objects** (~3.0x–3.6x faster) and **streams/files** (bounded RAM, no `JSON.parse()` OOM):
+
+```ts
+import * as fs from "fs";
+import { Piffero } from "piffero-plus";
+
+// Before (jsonpath-plus, in-memory only):
+// const res = JSONPath({ path: "$.employees[?@.active].name", json: data, resultType: "path" });
+
+// After (piffero-plus — in-memory JS object, ~3x faster + full RFC 9535):
+const res = Piffero.query(data, "$.employees[?@.active].name", { resultType: "path" });
+
+// After (piffero-plus — streaming a 200+ MiB file or fetch().body with bounded RAM):
+const raw = await Piffero.findAsPromise(
+  fs.createReadStream("./huge.json"),
+  "$.employees[?@.active].name",
+  { resultType: "path" }
+);
 ```
 
 ---

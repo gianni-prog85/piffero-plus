@@ -352,6 +352,33 @@ out.pipe(process.stdout);
 
 ---
 
+## Command-Line Interface (`npx piffero-plus`)
+
+`piffero-plus` includes a streaming CLI (`piffero-plus` / `piffero` binary in `package.json`, backed by [`runCli()`](../src/cli.ts)):
+
+```bash
+# Stream from a file
+npx piffero-plus '$.employees[?@.active == true].name' ./employees.json
+
+# Stream from stdin with RFC 9535 Normalized Paths (--path) and pretty output (--pretty)
+cat ./employees.json | npx piffero-plus '$..number' --path --pretty
+
+# Output RFC 6901 JSON Pointers (--pointer) or combined objects (--all)
+npx piffero-plus '$.employees[0].name' ./employees.json --all
+```
+
+| Flag | Description |
+|---|---|
+| `-r, --result-type <type>` | Output mode: `value` (default), `path`, `pointer`, or `all` |
+| `--path` | Shorthand for `--result-type path` (RFC 9535 §2.7 Normalized Paths) |
+| `--pointer` | Shorthand for `--result-type pointer` (RFC 6901 JSON Pointers) |
+| `--all` | Shorthand for `--result-type all` (`{ path, pointer, value }`) |
+| `-p, --pretty` | Pretty-print the output JSON array (`2`-space indentation) |
+| `-v, --version` | Print package version |
+| `-h, --help` | Print CLI usage help |
+
+---
+
 ## Related Documentation
 
 - [JSONPath Syntax & RFC 9535 Semantics Guide](./jsonpath-guide.md)
