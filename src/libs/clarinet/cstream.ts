@@ -1323,18 +1323,28 @@ export class CStream extends Writable {
     return true;
   }
 
-  end(chunk?: any) {
+  end(chunk?: any, _encoding?: any, cb?: () => void): this {
+    if (typeof chunk === "function") {
+      cb = chunk;
+      chunk = undefined;
+    } else if (typeof _encoding === "function") {
+      cb = _encoding;
+    }
     if (this._parser.closed) {
-      return;
+      if (cb) cb();
+      return this;
     }
     if (chunk) {
       this.write(chunk);
     }
     if (this._parser.closed) {
-      return;
+      if (cb) cb();
+      return this;
     }
     this._parser.end();
     this.endParser();
+    if (cb) cb();
+    return this;
   }
 
   endParser() {
