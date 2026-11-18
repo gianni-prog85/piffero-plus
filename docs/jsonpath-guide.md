@@ -186,9 +186,36 @@ $.items[($.idx)]                 // Dynamic index from root document
 
 ---
 
-## 8. Common Invalid Queries (`PifferoJsonPathError`)
+## 8. Normalized Paths (RFC 9535 §2.7) & JSON Pointers (`resultType`)
 
-The following queries throw `PifferoJsonPathError` synchronously when passed to `Piffero.findByPath`, `findAsString`, or `findAsPromise`:
+Every `Piffero` method accepts an optional `options?: PifferoQueryOptions` object (`{ resultType?: "value" | "path" | "pointer" | "all" }`):
+
+| `resultType` | Output Format | Example (`$.employees[0].name`) |
+|---|---|---|
+| `"value"` *(default)* | Matched JSON values | `["John"]` |
+| `"path"` | Canonical [RFC 9535 §2.7 Normalized Path](https://www.rfc-editor.org/rfc/rfc9535#section-2.7) | `["$['employees'][0]['name']"]` |
+| `"pointer"` | [RFC 6901 JSON Pointer](https://www.rfc-editor.org/rfc/rfc6901) | `["/employees/0/name"]` |
+| `"all"` | Combined `{ path, pointer, value }` object | `[{"path":"$['employees'][0]['name']","pointer":"/employees/0/name","value":"John"}]` |
+
+### RFC 9535 §2.7 Canonical Escaping Rules (`resultType: "path"`)
+- Root node is `"$"`.
+- Object member names are always formatted with single-quoted bracket notation `['...']`.
+- Array indices are always formatted as non-negative decimal integers `[i]` (even when matched via negative indices, slices, or `(@.length-1)`).
+- Special characters inside member names use canonical escapes:
+  - `\b` (`U+0008`), `\t` (`U+0009`), `\n` (`U+000A`), `\f` (`U+000C`), `\r` (`U+000D`)
+  - `\'` (single quote) and `\\` (backslash)
+  - Other control characters (`U+0000–U+001F`) as lowercase hex `\u00xx` (e.g. `\u0000`, `\u001f`)
+  - Double quotes `"` are left unescaped inside `'...'`.
+
+### RFC 6901 JSON Pointer Rules (`resultType: "pointer"`)
+- Root node is `""` (empty string).
+- Each path segment is prefixed with `/`, with `~` escaped as `~0` and `/` escaped as `~1`.
+
+---
+
+## 9. Common Invalid Queries (`PifferoJsonPathError`)
+
+The following queries throw `PifferoJsonPathError` synchronously when passed to `Piffero.findByPath`, `findAsString`, `findAsPromise`, or `query`:
 
 - Missing leading `$`: `"employees[0]"`
 - Empty or trailing dots: `"$."`, `"$.."`, `"$...a"`

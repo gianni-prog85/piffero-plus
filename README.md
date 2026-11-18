@@ -1,10 +1,10 @@
 # PIFFERO-PLUS  [![NPM version](https://img.shields.io/npm/v/piffero-plus.svg)](https://www.npmjs.com/package/piffero-plus) [![CI](https://github.com/gianni-prog85/piffero-plus/actions/workflows/ci.yml/badge.svg)](https://github.com/gianni-prog85/piffero-plus/actions/workflows/ci.yml)
 
-Zero-dependency streaming RFC 9535 JSONPath parser for large JSON files and Node.js `Readable` streams.
+Zero-dependency streaming RFC 9535 JSONPath parser for large JSON files, Node.js `Readable` streams, Web `ReadableStream`s (`fetch`), `string`/`Buffer`, and in-memory JS objects.
 
-`piffero-plus` is an open-source SAX-like parser (evolved from `piffero`) that operates directly on Node.js `Readable` streams to extract parts of huge JSON files without loading the entire document into memory.
+`piffero-plus` is an open-source SAX-like parser (evolved from `piffero`) that operates directly on streams to extract parts of huge JSON files without loading the entire document into memory—while also supporting synchronous in-memory evaluation via `Piffero.query()`.
 
-It processes JSON documents larger than available RAM and returns matched values as a valid JSON array stream, string, or Promise—with automatic early stream termination on deterministic queries, full backpressure support, zero runtime dependencies, and full [RFC 9535](https://www.rfc-editor.org/info/rfc9535/) compliance.
+It processes JSON documents larger than available RAM and returns matched values, [RFC 9535 §2.7 Normalized Paths](https://www.rfc-editor.org/rfc/rfc9535#section-2.7), or [RFC 6901 JSON Pointers](https://www.rfc-editor.org/rfc/rfc6901) as a valid JSON array stream, string, Promise, or JavaScript array—with automatic early stream termination on deterministic queries, full backpressure support, zero runtime dependencies, and full [RFC 9535](https://www.rfc-editor.org/info/rfc9535/) compliance.
 
 ```
   ______________________________ .  ♪
@@ -31,22 +31,24 @@ It processes JSON documents larger than available RAM and returns matched values
 ## Why `piffero-plus`?
 
 - **Zero runtime dependencies**: Self-contained (`dependencies: {}`) with bundled TypeScript declarations (`dist/index.d.ts`).
-- **Larger-than-RAM streaming**: Parses Node.js `Readable` streams token-by-token (`CStream` + `StreamingPathEngine`) without loading the full JSON document or allocating JavaScript objects for unmatched branches.
-- **Automatic early stream termination**: Destroys and unpipes the upstream stream immediately once deterministic queries (`$.[1].payload`, `$[0:10:2]`, `$[2,0,2,1:3].id`) finish—delivering **~0.45–1.24 ms** extraction on 200 MiB payloads (up to **~1,697x–7,336x** faster than in-memory `jsonpath-plus` and **~12x–21x** faster than Oboe).
+- **Larger-than-RAM streaming**: Parses Node.js `Readable` and WHATWG Web `ReadableStream` (`fetch().body`) token-by-token (`CStream` + `StreamingPathEngine`) without loading the full JSON document or allocating JavaScript objects for unmatched branches.
+- **Universal input sources (`PifferoInput`)**: Query Node.js `Readable`, Web `ReadableStream`, raw `string`/`Buffer`/`Uint8Array` (via zero-stream `parseSync`), or already-parsed JavaScript objects/arrays with the exact same RFC 9535 semantics.
+- **Automatic early stream termination**: Destroys/cancels the upstream Node `Readable` or Web `ReadableStream` immediately once deterministic queries (`$.[1].payload`, `$[0:10:2]`, `$[2,0,2,1:3].id`) finish—delivering **~0.45–1.24 ms** extraction on 200 MiB payloads (up to **~1,697x–7,336x** faster than in-memory `jsonpath-plus` and **~12x–21x** faster than Oboe).
 - **Backpressure-aware JSON pass-through**: `Piffero.findByPath()` emits a chunked, backpressure-aware Node.js `Readable` stream outputting a valid JSON array (`[...]`) ready to `.pipe(res)` with zero `JSON.parse`/`JSON.stringify` round-trips, `skipDecode` on skipped subtrees, and `PrunedJsBuilder` field pruning for filters.
-- **Full RFC 9535 JSONPath compliance on streams**:
+- **Full RFC 9535 JSONPath compliance (including §2.7 Normalized Paths)**:
   - Recursive descent (`..`), wildcards (`*`), full RFC 9535 slices (negative bounds/steps & `step=0`), and **heterogeneous bracket unions preserving selector order and duplicates** (`$[2, 0, 2]`, `$[0, 2:4, *]`, `$['b', 'a', 'b']`).
   - Parenless `?` and Goessner `?()` filters, singleton `NOTHING` & structural equality semantics (`false`/`0`/`""`/`null` existence, non-coercing `==`, type-safe `<`/`>`), full sub-queries (`@..price`, `@.tags[*]`), and root `$` references (even when the root property appears *after* the filtered array in the stream).
   - All 5 RFC 9535 standard functions: `length()`, `count()`, `match()`, `search()`, and `value()` (with RFC 9485 I-Regexp validation & caching).
+  - **Output modes (`resultType`)**: Return matched values (`"value"`, default), canonical RFC 9535 §2.7 Normalized Paths (`"path"`, e.g. `"$['employees'][0]['name']"`), RFC 6901 JSON Pointers (`"pointer"`, e.g. `"/employees/0/name"`), or combined `{ path, pointer, value }` objects (`"all"`).
   - `\uXXXX`/UTF-16 surrogate escapes, I-JSON safe integer bounds, `member-name-shorthand` validation, and script expressions (`(@.length-1)`).
-- **Flexible APIs & fail-fast errors**: Choose `findByPath` (Stream), `findAsString` (callback), or `findAsPromise` (`async`/`await`), with synchronous syntax validation (`PifferoJsonPathError`) and clean malformed-JSON errors (`PifferoError`).
-- **Proven speed**: Ranks #1 across early-file lookups, mid/end-of-file lookups, slices, heterogeneous unions, selective nested wildcards, recursive descent, and RFC 9535 filters over 200 MiB payloads against 7 libraries (see [Performance](#performance)).
+- **Flexible APIs & fail-fast errors**: Choose `findByPath` (Stream), `findAsString` (callback), `findAsPromise` (`async`/`await`), or synchronous `Piffero.query()` (direct `any[]` output, **~3.0x–3.6x faster** than `jsonpath-plus` on in-memory JS objects), with synchronous syntax validation (`PifferoJsonPathError`) and clean malformed-JSON errors (`PifferoError`).
+- **Proven speed**: Ranks #1 across early-file lookups, mid/end-of-file lookups, slices, heterogeneous unions, selective nested wildcards, recursive descent, RFC 9535 filters, and in-memory evaluation against 7 libraries (see [Performance](#performance)).
 
 ---
 
 ## Supported JSONPath & RFC 9535 Capabilities
 
-`piffero-plus` supports both [Stefan Goessner's JSONPath](http://goessner.net/articles/JsonPath/) and the [RFC 9535](https://www.rfc-editor.org/info/rfc9535/) standard on streaming JSON:
+`piffero-plus` supports both [Stefan Goessner's JSONPath](http://goessner.net/articles/JsonPath/) and the [RFC 9535](https://www.rfc-editor.org/info/rfc9535/) standard across streams and in-memory inputs:
 
 | Operator / Construct | Description | Status |
 |---|---|---|
@@ -61,6 +63,7 @@ It processes JSON documents larger than available RAM and returns matched values
 | `?` / `?()` | RFC 9535 filters (`===`, `!==`, `==`, `!=`, `>`, `<`, `>=`, `<=`, `&&`, `\|\|`, `!`, existence, structural equality, sub-queries) | ✅ |
 | `length` `count` `match` `search` `value` | RFC 9535 standard filter functions with compile-time type checking & I-Regexp (RFC 9485) | ✅ |
 | `()` | Script expressions (static arithmetic, `@.length - k`, and `$` index expressions) | ✅ |
+| `resultType` (`path` / `pointer` / `all`) | RFC 9535 §2.7 Normalized Paths (`$['a'][0]`), RFC 6901 JSON Pointers (`/a/0`), or `{ path, pointer, value }` | ✅ |
 
 ### Quick Feature Examples
 
@@ -73,8 +76,9 @@ It processes JSON documents larger than available RAM and returns matched values
 | **RFC 9535 Filters** | `$[?@.v]`, `$[?@.a == @.b]`, `$.items[?@.price < $.maxPrice]` | Falsy-safe existence (`false`/`0`/`""`/`null`), non-coercing `==`, `NOTHING`-safe `<`/`>`, `PrunedJsBuilder` |
 | **RFC 9535 Functions** | `$[?length(@.tags) >= 2]`, `$[?match(@.name, "[A-Z][a-z]+")]`, `$[?count(@.scores[*]) > 1]` | Supports `length()`, `count()`, `value()`, `match()`, `search()` |
 | **Script Expressions** | `$.employees[(1+1)]`, `$.employees[(@.length-1)].name`, `$.items[($.idx)]` | Static arithmetic and O(*k*) tail-buffered `@.length - k` |
+| **Normalized Paths & Pointers** | `{ resultType: "path" }`, `{ resultType: "pointer" }`, `{ resultType: "all" }` | Lazy `O(depth)` path formatting; skips container value decoding on `"path"` / `"pointer"` |
 
-> **Output format:** `piffero-plus` **always** produces a valid JSON array (`[...]`)—whether consumed as a stream, string callback, or Promise. Empty matches return `"[]"`, single matches return `"[value]"`, and JSON `null` values are preserved. See the [JSONPath Syntax & RFC 9535 Guide](./docs/jsonpath-guide.md) for complete semantics.
+> **Output format:** `findByPath`, `findAsString`, and `findAsPromise` **always** produce a valid JSON array (`[...]`), while `Piffero.query()` returns the JavaScript array (`any[]`) directly. Empty matches return `"[]"` (or `[]`), single matches return `"[value]"` (or `[value]`), and JSON `null` values are preserved. See the [JSONPath Syntax & RFC 9535 Guide](./docs/jsonpath-guide.md) for complete semantics.
 
 ---
 
@@ -88,29 +92,31 @@ npm install piffero-plus
 
 ## API Overview
 
-`piffero-plus` exports the `Piffero` class with three static methods (full details in [API Reference](./docs/api-reference.md)):
+`piffero-plus` exports the `Piffero` class with four static methods (full details in [API Reference](./docs/api-reference.md)):
 
 | Method | Signature | Returns | Best For |
 |---|---|---|---|
-| **`Piffero.findByPath`** | `(stream: Readable, jsonPath?: string)` | `Stream` (`Readable` at runtime) | Large result sets, `.pipe(res)` HTTP streaming, file-to-file pipelines |
-| **`Piffero.findAsString`** | `(callback: (result, err?) => void, stream: Readable, jsonPath?: string)` | `void` | Callback-based codebases & fastest small-output extraction |
-| **`Piffero.findAsPromise`** | `(stream: Readable, jsonPath?: string)` | `Promise<string>` | `async`/`await` workflows & point/slice lookups |
+| **`Piffero.findByPath`** | `(input: PifferoInput, jsonPath?: string, options?: PifferoQueryOptions)` | `Stream` (`Readable` at runtime) | Large result sets, `.pipe(res)` HTTP streaming, file-to-file pipelines |
+| **`Piffero.findAsString`** | `(callback: (result, err?) => void, input: PifferoInput, jsonPath?: string, options?: PifferoQueryOptions)` | `void` | Callback-based codebases & fastest small-output extraction from streams |
+| **`Piffero.findAsPromise`** | `(input: PifferoInput, jsonPath?: string, options?: PifferoQueryOptions)` | `Promise<string>` | `async`/`await` workflows on Node `Readable` or Web `ReadableStream` (`fetch().body`) |
+| **`Piffero.query`** | `(input: object \| any[] \| string \| Buffer \| Uint8Array, jsonPath?: string, options?: PifferoQueryOptions)` | `any[]` | Synchronous evaluation on in-memory JS objects/arrays or `string`/`Buffer` payloads |
 
-- `jsonPath` defaults to `"$"` (matches the root JSON value, returning `"[<root>]"`).
-- `findAsString` invokes `callback(result, err)` with `err === null` on success.
-- `findAsPromise` resolves to a JSON-encoded array string (`"[...]"`): use `JSON.parse(result)` to obtain JS objects/arrays.
+- **`PifferoInput`**: Accepts a Node.js `Readable` stream, a WHATWG Web `ReadableStream` (`fetch().body`), a raw JSON `string` / `Buffer` / `Uint8Array`, or an in-memory JS object/array.
+- **`options.resultType`**: `"value"` (default), `"path"` (RFC 9535 §2.7 Normalized Path), `"pointer"` (RFC 6901 JSON Pointer), or `"all"` (`{ path, pointer, value }`).
+- `jsonPath` defaults to `"$"` (matches the root JSON value).
 
 ---
 
 ## Error Handling
 
-- **Invalid JSONPath syntax (`PifferoJsonPathError`)**: `Piffero.findByPath`, `findAsString`, and `findAsPromise` validate the query **synchronously** before touching the stream and throw `PifferoJsonPathError` on invalid paths (missing leading `$`, unclosed brackets/quotes, invalid I-JSON integers, unknown functions, etc.).
-- **Malformed JSON input (`PifferoError`)**: Wrapped in `PifferoError` and delivered asynchronously via:
+- **Invalid JSONPath syntax (`PifferoJsonPathError`)**: `Piffero.findByPath`, `findAsString`, `findAsPromise`, and `query` validate the query **synchronously** and throw `PifferoJsonPathError` on invalid paths (missing leading `$`, unclosed brackets/quotes, invalid I-JSON integers, unknown functions, etc.).
+- **Malformed JSON input (`PifferoError`)**: Wrapped in `PifferoError` and delivered via:
   - the `'error'` event on the returned stream (`findByPath`),
   - the second `err` argument of the callback (`findAsString`),
-  - Promise rejection (`findAsPromise`).
+  - Promise rejection (`findAsPromise`),
+  - synchronous throw (`Piffero.query`).
 
-> Tip: `Piffero`, `PifferoError`, and `PifferoJsonPathError` are all exported directly from `'piffero-plus'` for `instanceof` checks. Always attach an `'error'` listener to your source `Readable` stream when using `findByPath` (see [API Reference](./docs/api-reference.md#error-types--handling)).
+> Tip: `Piffero`, `PifferoError`, `PifferoJsonPathError`, `PifferoInput`, `WebReadableStreamLike`, `PifferoResultType`, and `PifferoQueryOptions` are all exported directly from `'piffero-plus'`. Always attach an `'error'` listener to your source `Readable` stream when using `findByPath` (see [API Reference](./docs/api-reference.md#error-types--handling)).
 
 ---
 
@@ -248,7 +254,45 @@ await Piffero.findAsPromise(fs.createReadStream('./employees.json'), '$.employee
 // => ["Joe"]
 ```
 
-### 4. Express.js Streaming Endpoint (TypeScript)
+### 4. Normalized Paths (RFC 9535 §2.7), JSON Pointers & `Piffero.query()`
+
+```js
+const { Piffero } = require('piffero-plus');
+const fs = require('fs');
+
+// 1. Canonical RFC 9535 §2.7 Normalized Paths on a stream
+const paths = JSON.parse(
+  await Piffero.findAsPromise(fs.createReadStream('./employees.json'), '$..number', {
+    resultType: 'path',
+  })
+);
+// => [
+//   "$['employees'][0]['phoneNumbers'][0]['number']",
+//   "$['employees'][0]['phoneNumbers'][1]['number']"
+// ]
+
+// 2. RFC 6901 JSON Pointers or combined { path, pointer, value }
+const all = Piffero.query(
+  fs.readFileSync('./employees.json'),
+  '$.employees[?@.active == true].name',
+  { resultType: 'all' }
+);
+// => [{ path: "$['employees'][0]['name']", pointer: "/employees/0/name", value: "John" }]
+
+// 3. Direct synchronous evaluation on in-memory JS objects
+const data = JSON.parse(fs.readFileSync('./employees.json', 'utf8'));
+const names = Piffero.query(data, '$.employees[*].name');
+// => ['John', 'Joe']
+
+// 4. Streaming directly from a WHATWG Web ReadableStream (fetch().body)
+const response = await fetch('https://example.com/huge-events.json');
+const firstTwoIds = JSON.parse(
+  await Piffero.findAsPromise(response.body, '$[0:2].id')
+);
+// Automatically cancels response.body once the first 2 items are extracted!
+```
+
+### 5. Express.js Streaming Endpoint (TypeScript)
 
 ```ts
 import * as fs from "fs";
@@ -290,21 +334,26 @@ app.listen(3000, () => {
 ## How It Works
 
 ```text
-Readable Stream ──▶ CStream (SAX tokenizer + skipDecode)
+Node Readable / Web ReadableStream / string / Buffer / JS Object
+                       │
+                       ├── JS Object/Array ──▶ evaluateInMemory() (direct AST/step traversal)
+                       ▼
+                 CStream (SAX tokenizer + skipDecode)
                        │
                        ▼
-                  MasterHandler
-                   ├── SingleStepHandler   (fast-path for simple linear paths)
-                   └── StreamingPathEngine (wildcards, .., slices, unions, filters, scripts)
+                 MasterHandler
+                  ├── SingleStepHandler   (fast-path for simple linear value paths)
+                  └── StreamingPathEngine (wildcards, .., slices, unions, filters, scripts, resultType)
                        │
                        ▼
-                  Chunked JSON Output ([...]) with backpressure & early stream destroy
+                 Chunked JSON Output ([...]) or JS Array (Piffero.query)
 ```
 
 Key internal optimizations:
-- **`skipDecode`**: Skips UTF-8 string decoding inside unmatched JSON subtrees.
+- **`skipDecode`**: Skips UTF-8 string decoding inside unmatched JSON subtrees (and skips container value serialization when `resultType` is `"path"` or `"pointer"`).
 - **`PrunedJsBuilder` & `rootProjection`**: Materializes only the properties actually referenced by filters, downstream steps, and root (`$`) sub-queries.
-- **`rootMaxIndex` early exit**: Immediately stops reading the upstream stream once deterministic indices/slices/unions are satisfied.
+- **`rootMaxIndex` early exit**: Immediately stops reading the upstream Node `Readable` (`destroy()`) or Web `ReadableStream` (`reader.cancel()`) once deterministic indices/slices/unions are satisfied.
+- **Lazy `O(depth)` path formatting**: Tracks object keys and array indices on `frameStack` and formats RFC 9535 Normalized Paths (`$['a'][0]`) or JSON Pointers (`/a/0`) only when a match occurs—with zero overhead when `resultType === "value"`.
 - **Ring-buffered tail queries**: Evaluates `$[-k:]` and `@.length - k` in O(*k*) memory without collecting the full array.
 
 Read the deep dive in [Internal Architecture & Performance Engineering](./docs/architecture.md).
@@ -318,7 +367,7 @@ All benchmark suites automatically generate and cache a **200 MiB** (`200.01 MiB
 ```bash
 npm install                      # Install devDependencies (required for build/test/benchmarks)
 npm run build                    # Compile TypeScript to ./dist
-npm test                         # Run Jasmine test suite
+npm test                         # Run Jasmine test suite (205 specs)
 npm run lint                     # Run TSLint
 npm run benchmark                # Benchmark.Suite on 200 MiB JSON (piffero-plus vs Oboe vs @streamparser/json vs jsonpath-plus)
 npm run benchmark:compare        # 11-scenario 200 MiB comparison (piffero-plus vs Oboe vs @streamparser/json vs jsonpath-plus)
@@ -326,6 +375,7 @@ npm run benchmark:streaming      # 7-scenario 200 MiB comparison (piffero-plus v
 npm run benchmark:bfj            # 5-scenario 200 MiB comparison (piffero-plus vs bfj)
 npm run benchmark:200mb          # 15-scenario 200 MiB scale comparison across all 7 libraries
 npm run benchmark:filters        # ConditionEval RFC 9535 filter microbenchmark (200k ops/case)
+npm run benchmark:phase5         # Phase 5 suite: in-memory Piffero.query(), resultType="path", RFC 9535 functions & WebStream
 ```
 
 ---
@@ -334,7 +384,7 @@ npm run benchmark:filters        # ConditionEval RFC 9535 filter microbenchmark 
 
 Benchmarks run on the **200 MiB** GitHub events dataset (`200.01 MiB` / `209.72 MB`, `62,683` records generated from [`spec/jsonFiles/large-file.json`](./spec/jsonFiles/large-file.json)) against 7 libraries (`@sapientpro/json-stream`, `json-web-streams`, `stream-json`, `@streamparser/json`, `Oboe`, `bfj`, and in-memory `jsonpath-plus`).
 
-### Summary (200 MiB JSON)
+### Summary (200 MiB JSON & In-Memory)
 
 | Workload | Best `piffero-plus` | Key Comparison |
 |---|---|---|
@@ -346,16 +396,19 @@ Benchmarks run on the **200 MiB** GitHub events dataset (`200.01 MiB` / `209.72 
 | **Selective nested wildcards (`$[*].payload.commits[*].author.email`)** | **1611.00 ms** (`stream`) | **#1 overall**: ahead of `json-web-streams` (`1669.64 ms`), `jsonpath-plus` (`1735.45 ms`), `@sapientpro/json-stream` (`1911.17 ms`), `@streamparser/json` (`3756.11 ms`), `Oboe` (`4499.91 ms`), and `stream-json` (`5619.68 ms`) |
 | **Recursive descent (`$..user.login`)** | **2602.03 ms** (`string`) | **Fastest streaming parser**: faster than `@sapientpro/json-stream` (`3138.20 ms`), `Oboe` (`4518.88 ms`), `stream-json` (`5488.51 ms`), and **~22.8x** vs `bfj` (`$..login`); `@streamparser/json` & `json-web-streams` unsupported |
 | **RFC 9535 filters (`?[...]`, `==`, `NOTHING`-safe `>`)** | **1460.66–1610.40 ms** | **Only streaming library with full RFC 9535 filters**: **~1.28x** faster than `jsonpath-plus` on `$[?(@.type == "IssuesEvent")].id` (`1460.66 ms` vs `1866.99 ms`), **~2.8x** faster than `Oboe` on `$[?@.payload.issue]`, and safely handles missing paths where `jsonpath-plus` throws `TypeError` |
+| **Pure in-memory `Piffero.query(obj)` (~39 MB parsed JSON)** | **3.92–9.18 ms** | **~3.0x–3.6x faster** than `jsonpath-plus` on already-parsed JS objects across wildcards (`7.51 ms` vs `22.35 ms`), nested wildcards (`6.15 ms` vs `20.77 ms`), equality filters (`3.92 ms` vs `14.21 ms`), and `resultType: "path"` (`9.18 ms` vs `27.57 ms`) |
 
 ### `piffero-plus` vs `jsonpath-plus`
 
-If you are coming from `jsonpath-plus` (in-memory), here is how `piffero-plus` compares on large payloads and RFC 9535 queries:
+If you are coming from `jsonpath-plus`, here is how `piffero-plus` compares across both streaming (200 MiB) and in-memory (`Piffero.query`) workloads:
 
 | Dimension | `piffero-plus` | `jsonpath-plus` |
 |---|---|---|
-| **Memory model** | Bounded-RAM Node.js streaming (handles files larger than RAM, zero runtime dependencies) | Requires full `JSON.parse()` of the entire document in V8 heap before querying |
+| **Memory & input model** | Bounded-RAM streaming (Node `Readable`, Web `ReadableStream` / `fetch`), `string`/`Buffer`, **plus** synchronous in-memory `Piffero.query(obj)` | Requires full `JSON.parse()` of the entire document in V8 heap before querying |
+| **Pure in-memory JS object query (`Piffero.query`)** | **7.51 ms** (`$[*].actor.login`), **6.15 ms** (nested `*`), **3.92 ms** (`==` filter), **9.18 ms** (`resultType: "path"`) | **22.35 ms**, **20.77 ms**, **14.21 ms**, **27.57 ms** (**~3.0x–3.6x slower**) |
 | **Point lookups, slices & unions (200 MiB)** | **0.45 ms** (`$.[1].payload`), **1.24 ms** (`$[0:10:2]`), **0.48 ms** (`$[2,0,2,1:3].id`), **601.17 ms** (`$.[31341]`), **1052.55 ms** (`$.[56754]`) | **3301.31 ms**, **2104.39 ms**, **1482.23 ms**, **2061.89 ms**, **1765.17 ms** (**~1.7x–7,336x slower**) |
 | **Key unions & equality filters (200 MiB)** | **1374.04 ms** (`$[*]['type','id']`), **1460.66 ms** (`$[?(@.type == "IssuesEvent")].id`) | **2153.09 ms** (**~1.57x slower**), **1866.99 ms** (**~1.28x slower**) |
+| **Normalized Paths (`resultType: "path"`, 200 MiB)** | **11.92 ms** on `$[0:10:2]` (**~90x faster** via `skipDecode` + early exit); **2963.13 ms** on full `$[*].actor.login` stream | **1073.55 ms** on `$[0:10:2]`; **1506.70 ms** on full `$[*].actor.login` in-RAM |
 | **Full-document in-RAM scans (`$[*]`, `$..user.login`)** | **3346.97 ms** (`$[*]`), **2602.03 ms** (`$..user.login`) with bounded memory | **2049.36 ms** (`$[*]`), **1826.14 ms** (`$..user.login`) when the entire JSON fits in RAM |
 | **RFC 9535 parenless filters (`$[?@.payload.issue]`)** | ✅ Full support (**1590.25 ms** on 200 MiB) | ❌ Silently returns `[]` |
 | **Missing intermediate properties (`@.a.b.c > 1000`)** | ✅ Safe `NOTHING` propagation (**1610.40 ms** on 200 MiB) | ❌ Throws `TypeError` |
@@ -368,12 +421,12 @@ If you are coming from `jsonpath-plus` (in-memory), here is how `piffero-plus` c
 ## Full Documentation & Reports
 
 - **Guides & References**
-  - [API Reference (`findByPath`, `findAsString`, `findAsPromise`, Errors, Recipes)](./docs/api-reference.md)
-  - [JSONPath Syntax & RFC 9535 Semantics Guide (Selectors, `NOTHING`, Functions, I-Regexp)](./docs/jsonpath-guide.md)
+  - [API Reference (`findByPath`, `findAsString`, `findAsPromise`, `query`, `resultType`, Universal Inputs, Errors)](./docs/api-reference.md)
+  - [JSONPath Syntax & RFC 9535 Semantics Guide (Selectors, `NOTHING`, Functions, I-Regexp, Normalized Paths)](./docs/jsonpath-guide.md)
   - [Internal Architecture & Performance Engineering](./docs/architecture.md)
   - [Why Choose `piffero-plus`: Architecture, RFC 9535 & Performance Advantages](./docs/advantages.md)
 - **Benchmark Reports**
-  - [200 MiB Scale Comparison (15 Scenarios across 7 Libraries)](./docs/benchmarks/scale-200mb.md)
+  - [200 MiB Scale & Phase 5 Comparison (15 Scenarios + In-Memory, `resultType`, Functions & WebStream)](./docs/benchmarks/scale-200mb.md)
   - [Full 8-Library Feature & JSONPath Compatibility Matrix](./docs/benchmarks/feature-matrix.md)
   - [Streaming Parsers Comparison (`@sapientpro/json-stream`, `stream-json`, `json-web-streams`)](./docs/benchmarks/streaming-parsers.md)
   - [Extended 11-Scenario Comparison (`Oboe`, `@streamparser/json`, `jsonpath-plus`)](./docs/benchmarks/general-comparison.md)

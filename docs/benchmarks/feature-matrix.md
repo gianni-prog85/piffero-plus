@@ -21,6 +21,8 @@ Side-by-side comparison across all 8 tested libraries (`piffero-plus`, `@sapient
 | **RFC 9535 heterogeneous unions & selector order/duplicates (`[2, 0, 2]`, `[0, 2:4, *]`)** | ✅ | Key/index only (no order/dups) | ❌ | Key/index only | Key/index only | ❌ | ❌ | Partial (no spaces, drops key+filter) |
 | **RFC 9535 full queries in filters (`@..prop`, `@.tags[*]`) & root `$` references** | ✅ (pruned `$` + deferred stream) | ❌ (throws) | ❌ (JS custom) | ❌ (throws) | ❌ (throws) | ❌ | ❌ | ✅ (requires full JSON in RAM) |
 | **RFC 9535 standard functions (`length`, `count`, `match`, `search`, `value`)** | ✅ (with RFC 9485 I-Regexp) | ❌ (throws) | ❌ (JS custom) | ❌ (throws) | ❌ (throws) | ❌ | ❌ | ❌ |
+| **RFC 9535 §2.7 Normalized Paths & JSON Pointer (`resultType`)** | ✅ (`value` \| `path` \| `pointer` \| `all`) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (in-memory only) |
+| **Universal inputs (Node `Readable`, Web `ReadableStream`, `string`/`Buffer`, JS objects)** | ✅ (`findByPath` / `findAsPromise` / `query`) | Node stream / chunks | Node `Readable` | Web `ReadableStream` | Chunks / Web / Node | Node `Readable` / HTTP | Node `Readable` | In-memory JS objects only |
 | **Safe missing intermediate property access in filters** | ✅ | N/A | N/A | N/A | N/A | N/A | N/A | ❌ (throws `TypeError`) |
 | **Preserves JSON `null` values** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ (skipped as EOF) | ✅ |
 | **Built-in TypeScript declarations** | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ (DefinitelyTyped) | ❌ | ✅ |

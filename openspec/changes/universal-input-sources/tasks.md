@@ -11,4 +11,4 @@
 - [x] Aggiungere il metodo sincrono `Piffero.query(input, jsonPath = "$", options?)` che restituisce direttamente `any[]` (valori JS deserializzati o Normalized Paths) per oggetti in-memory, `string` e `Buffer`.
 - [x] Verificare che l'early-exit (`rootMaxIndex`) su un `ReadableStream` Web cancelli lo stream sorgente senza leggere i chunk residui.
 - [x] Aggiungere unit test completi in `spec/piffero/` per ciascun tipo di input (`Readable`, Web `ReadableStream`, `string`, `Buffer`, `Uint8Array`, oggetto JS, array JS) e per `Piffero.query()`.
-- [ ] Aggiornare `README.md` e `docs/api-reference.md` con esempi per `fetch()` (`res.body`) e `Piffero.query()`.
+- [x] Aggiornare `README.md` e `docs/api-reference.md` con esempi per `fetch()` (`res.body`) e `Piffero.query()`.

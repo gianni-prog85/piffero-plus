@@ -5,6 +5,7 @@ Large-scale 15-scenario benchmark comparison across 7 libraries on a **200.01 Mi
 ```bash
 npm run benchmark:200mb
 npm run benchmark:filters   # ConditionEval RFC 9535 microbenchmark
+npm run benchmark:phase5    # Phase 5: in-memory query(), resultType="path", RFC 9535 functions & WebStream
 ```
 
 ## Benchmark Results (200 MiB JSON, avg ms)
@@ -27,6 +28,40 @@ npm run benchmark:filters   # ConditionEval RFC 9535 microbenchmark
 | **14. Heterogeneous union** `$[2,0,2,1:3].id` (5) | 1.42 ms | **0.48 ms** | N/A | N/A | N/A | N/A | N/A | 1482.23 ms |
 | **15. Key union** `$[*]['type','id']` (125,366) | 1387.07 ms | 1374.04 ms | **1256.29 ms** *(doc order)* | N/A | 5724.10 ms *(doc order)* | 3562.81 ms *(doc order)* | N/A | 2153.09 ms *(selector order)* |
 
+## Phase 5 Extended Benchmarks (`npm run benchmark:phase5`)
+
+Executed via [`compare-phase5.js`](../../benchmarking/compare-phase5.js):
+
+### 1. Pure In-Memory Evaluation (`Piffero.query(obj)` vs `jsonpath-plus`, ~39 MB parsed JSON in RAM)
+
+| Query (`large-file.json`, 11,351 events) | `Piffero.query()` | `jsonpath-plus` | Speedup |
+|---|---|---|---|
+| Wildcard shallow `$[*].actor.login` (11,351) | **7.51 ms** | 22.35 ms | **~2.98x faster** |
+| Nested wildcard `$[*].payload.commits[*].author.email` (10,109) | **6.15 ms** | 20.77 ms | **~3.38x faster** |
+| Equality filter `$[?(@.type == "IssuesEvent")].id` (545) | **3.92 ms** | 14.21 ms | **~3.63x faster** |
+| Normalized Paths `$[*].actor.login` (`resultType: "path"`) | **9.18 ms** | 27.57 ms | **~3.00x faster** |
+
+### 2. Normalized Paths (`resultType: "path"`) on 200 MiB JSON
+
+| Query | `piffero-plus` (stream) | `jsonpath-plus` (in-memory) | Notes |
+|---|---|---|---|
+| Early slice `$[0:10:2]` (5 paths) | **11.92 ms** | 1073.55 ms | **~90x faster** via `skipDecode` container fast-skip + early stream destroy |
+| Full wildcard `$[*].actor.login` (61,204 paths) | 2963.13 ms | **1506.70 ms** | Bounded `O(depth)` memory on stream vs full-heap `JSON.parse` |
+
+### 3. RFC 9535 Standard Functions on 200 MiB JSON (`piffero-plus`)
+
+| Query | Avg Time (200 MiB) | Matches |
+|---|---|---|
+| `length()`: `$[?length(@.payload.commits) > 1].id` | **2405.75 ms** | 5,954 |
+| `search()`: `$[?search(@.type, "Issue")].id` | **1815.60 ms** | 7,526 |
+| `count()`: `$[?count(@.payload.commits[*]) > 1].id` | **3853.01 ms** | 5,954 |
+
+### 4. Web `ReadableStream` (`Readable.toWeb`) on 200 MiB JSON
+
+| Query | `piffero-plus` (WebStream) | `json-web-streams` |
+|---|---|---|
+| `$[*].actor.login` (61,204 matches) | 4227.73 ms | **2018.24 ms** |
+
 ## ConditionEval RFC 9535 Microbenchmark (`npm run benchmark:filters`)
 
 Single-threaded CPU throughput over 200,000 pre-compiled AST evaluations ([`bench-conditioneval.js`](../../benchmarking/bench-conditioneval.js)):
@@ -48,9 +83,10 @@ Single-threaded CPU throughput over 200,000 pre-compiled AST evaluations ([`benc
 - **#1 overall on heterogeneous unions & selector-ordered key unions**:
   - `$[2,0,2,1:3].id` (mixed reordered index + duplicate + slice): **0.48 ms** (`string`) / **1.42 ms** (`stream`) vs `jsonpath-plus` `1482.23 ms` (**~3,088x** faster via bounded `rootMaxIndex` early-exit); all other streaming parsers lack heterogeneous unions.
   - `$[*]['type','id']` (125,366 matches, preserving RFC 9535 selector order `type` before `id`): **1374.04 ms** (`string`) / **1387.07 ms** (`stream`), **~1.57x** faster than `jsonpath-plus` (`2153.09 ms`), **~2.59x** faster than `@streamparser/json` (`3562.81 ms`), and **~4.17x** faster than `stream-json` (`5724.10 ms`)—and the only streaming parser preserving selector order instead of document key order.
-- **#1 overall on nested wildcards & RFC 9535 filters (`?[...]`, `==`, `Nothing`-safe comparisons)**:
+- **#1 overall on nested wildcards, RFC 9535 filters & pure in-memory queries (`Piffero.query`)**:
   - `$[*].payload.commits[*].author.email`: **1611.00 ms** (faster than `json-web-streams` `1669.64 ms`, `jsonpath-plus` `1735.45 ms`, `@sapientpro/json-stream` `1911.17 ms`, `@streamparser/json` `3756.11 ms`, `Oboe` `4499.91 ms`, and `stream-json` `5619.68 ms`).
   - `$..user.login`: **2602.03 ms** (faster than `@sapientpro/json-stream` `3138.20 ms`, `Oboe` `4518.88 ms`, and `stream-json` `5488.51 ms`).
   - `$[?@.payload.issue].payload.issue.number` (RFC 9535 without parentheses): **1590.25 ms** (**~2.8x** faster than `Oboe` duck-typing at `4502.94 ms`), while `jsonpath-plus` silently returns `[]` and `json-web-streams` throws `Unsupported node: FilterSelector`.
   - `$[?(@.type == "IssuesEvent")].id`: **1460.66 ms** vs `jsonpath-plus` `1866.99 ms` (**~1.28x** faster, bounded RAM), and `$[?(@.payload.issue.number > 1000)].payload.issue.number` succeeds in **1610.40 ms** via `NOTHING` propagation whereas `jsonpath-plus` throws `TypeError`.
+  - Pure in-memory `Piffero.query(obj)` is **~3.0x–3.6x faster** than `jsonpath-plus` across wildcards, nested wildcards, filters, and Normalized Paths (`resultType: "path"`).
 - **Consistent bounded-memory scaling**: Scaling 5.35x from 38 MB to 200 MiB keeps `piffero-plus` throughput linear while avoiding full-document V8 heap allocation.
