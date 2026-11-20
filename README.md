@@ -89,17 +89,21 @@ It processes JSON documents larger than available RAM and returns matched values
 npm install piffero-plus
 ```
 
-You can also query multi-gigabyte JSON files or streams directly from your terminal using `npx`:
+You can also query multi-gigabyte JSON (or `.gz`) files and streams directly from your terminal using `npx`:
 
 ```bash
 # Extract values from a large JSON file (streams with bounded RAM & early exit)
 npx piffero-plus '$.employees[?@.active == true].name' employees.json
 
+# Stream NDJSON / JSON Lines (--ndjson / --jsonl) or raw unquoted strings (-R / --raw, like jq -r)
+npx piffero-plus '$[*].id' huge-200mb.json.gz --raw | head -n 5
+npx piffero-plus '$[?@.type == "IssuesEvent"]' huge-200mb.json --ndjson
+
 # Output canonical RFC 9535 §2.7 Normalized Paths (--path) or JSON Pointers (--pointer)
 npx piffero-plus '$[0:5].id' huge-200mb.json --path --pretty
 
-# Pipe from stdin / curl / gzip
-curl -s https://example.com/events.json | npx piffero-plus '$[?@.type == "IssuesEvent"].id'
+# Pipe from stdin / curl / gzip (--gzip auto-detected for .gz files)
+curl -s https://example.com/events.json.gz | npx piffero-plus '$[?@.type == "IssuesEvent"].id' --gzip --raw
 ```
 
 ---
@@ -118,43 +122,47 @@ import { Piffero } from "piffero-plus";
 // After (piffero-plus — in-memory JS object, ~3x faster + full RFC 9535):
 const res = Piffero.query(data, "$.employees[?@.active].name", { resultType: "path" });
 
-// After (piffero-plus — streaming a 200+ MiB file or fetch().body with bounded RAM):
-const raw = await Piffero.findAsPromise(
+// After (piffero-plus — streaming a 200+ MiB file or fetch().body with for await...of):
+for await (const name of Piffero.iterate<string>(
   fs.createReadStream("./huge.json"),
-  "$.employees[?@.active].name",
-  { resultType: "path" }
-);
+  "$.employees[?@.active].name"
+)) {
+  console.log(name);
+  // Calling `break` immediately destroys/cancels the upstream stream!
+}
 ```
 
 ---
 
 ## API Overview
 
-`piffero-plus` exports the `Piffero` class with four static methods (full details in [API Reference](./docs/api-reference.md)):
+`piffero-plus` exports the `Piffero` class with five static methods (full details in [API Reference](./docs/api-reference.md)):
 
 | Method | Signature | Returns | Best For |
 |---|---|---|---|
+| **`Piffero.iterate<T>`** | `(input: PifferoInput, jsonPath?: string, options?: PifferoQueryOptions)` | `AsyncIterableIterator<T>` | Ergonomic `for await...of` streaming with automatic backpressure & early-exit on `break` |
 | **`Piffero.findByPath`** | `(input: PifferoInput, jsonPath?: string, options?: PifferoQueryOptions)` | `Stream` (`Readable` at runtime) | Large result sets, `.pipe(res)` HTTP streaming, file-to-file pipelines |
 | **`Piffero.findAsString`** | `(callback: (result, err?) => void, input: PifferoInput, jsonPath?: string, options?: PifferoQueryOptions)` | `void` | Callback-based codebases & fastest small-output extraction from streams |
 | **`Piffero.findAsPromise`** | `(input: PifferoInput, jsonPath?: string, options?: PifferoQueryOptions)` | `Promise<string>` | `async`/`await` workflows on Node `Readable` or Web `ReadableStream` (`fetch().body`) |
-| **`Piffero.query`** | `(input: object \| any[] \| string \| Buffer \| Uint8Array, jsonPath?: string, options?: PifferoQueryOptions)` | `any[]` | Synchronous evaluation on in-memory JS objects/arrays or `string`/`Buffer` payloads |
+| **`Piffero.query<T>`** | `(input: object \| any[] \| string \| Buffer \| Uint8Array, jsonPath?: string, options?: PifferoQueryOptions)` | `T[]` | Synchronous evaluation on in-memory JS objects/arrays or `string`/`Buffer` payloads |
 
 - **`PifferoInput`**: Accepts a Node.js `Readable` stream, a WHATWG Web `ReadableStream` (`fetch().body`), a raw JSON `string` / `Buffer` / `Uint8Array`, or an in-memory JS object/array.
-- **`options.resultType`**: `"value"` (default), `"path"` (RFC 9535 §2.7 Normalized Path), `"pointer"` (RFC 6901 JSON Pointer), or `"all"` (`{ path, pointer, value }`).
+- **`options.resultType`**: `"value"` (default), `"path"` (RFC 9535 §2.7 Normalized Path), `"pointer"` (RFC 6901 JSON Pointer), or `"all"` (`PifferoAllResult<T>`: `{ path, pointer, value }`).
 - `jsonPath` defaults to `"$"` (matches the root JSON value).
 
 ---
 
 ## Error Handling
 
-- **Invalid JSONPath syntax (`PifferoJsonPathError`)**: `Piffero.findByPath`, `findAsString`, `findAsPromise`, and `query` validate the query **synchronously** and throw `PifferoJsonPathError` on invalid paths (missing leading `$`, unclosed brackets/quotes, invalid I-JSON integers, unknown functions, etc.).
+- **Invalid JSONPath syntax (`PifferoJsonPathError`)**: `Piffero.iterate`, `findByPath`, `findAsString`, `findAsPromise`, and `query` validate the query **synchronously** and throw `PifferoJsonPathError` on invalid paths (missing leading `$`, unclosed brackets/quotes, invalid I-JSON integers, unknown functions, etc.).
 - **Malformed JSON input (`PifferoError`)**: Wrapped in `PifferoError` and delivered via:
+  - async rejection inside `for await...of` (`iterate`),
   - the `'error'` event on the returned stream (`findByPath`),
   - the second `err` argument of the callback (`findAsString`),
   - Promise rejection (`findAsPromise`),
   - synchronous throw (`Piffero.query`).
 
-> Tip: `Piffero`, `PifferoError`, `PifferoJsonPathError`, `PifferoInput`, `WebReadableStreamLike`, `PifferoResultType`, and `PifferoQueryOptions` are all exported directly from `'piffero-plus'`. Always attach an `'error'` listener to your source `Readable` stream when using `findByPath` (see [API Reference](./docs/api-reference.md#error-types--handling)).
+> Tip: `Piffero`, `PifferoError`, `PifferoJsonPathError`, `PifferoInput`, `WebReadableStreamLike`, `PifferoResultType`, `PifferoAllResult`, and `PifferoQueryOptions` are all exported directly from `'piffero-plus'`. Always attach an `'error'` listener to your source `Readable` stream when using `findByPath` (see [API Reference](./docs/api-reference.md#error-types--handling)).
 
 ---
 

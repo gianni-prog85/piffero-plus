@@ -1,10 +1,13 @@
+import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
+import * as zlib from "zlib";
 import { Readable, Writable } from "stream";
 import { runCli, Piffero, PifferoError, PifferoJsonPathError } from "../../index";
 
 const TEST_JSON_FILE = path.join(__dirname, "../jsonFiles/john-doe.json");
 
-function createCaptureBuffers(stdinContent?: string) {
+function createCaptureBuffers(stdinContent?: string | Buffer) {
   let out = "";
   let err = "";
   const stdout = new Writable({
@@ -33,6 +36,9 @@ describe("CLI (runCli) & Dual ESM/CJS Packaging", function () {
     const h = createCaptureBuffers();
     expect(await runCli(["--help"], h.io)).toBe(0);
     expect(h.getStdout()).toContain("Usage: piffero-plus");
+    expect(h.getStdout()).toContain("--ndjson");
+    expect(h.getStdout()).toContain("--raw");
+    expect(h.getStdout()).toContain("--gzip");
 
     const v = createCaptureBuffers();
     expect(await runCli(["--version"], v.io)).toBe(0);
@@ -97,6 +103,101 @@ describe("CLI (runCli) & Dual ESM/CJS Packaging", function () {
     expect(JSON.parse(cEq.getStdout())).toEqual(["$['users'][0]['name']"]);
   });
 
+  it("supports --ndjson / --jsonl streaming output", async function () {
+    const payload = JSON.stringify({
+      items: [
+        { id: 1, name: "Alice" },
+        { id: 2, name: "Bob" },
+      ],
+    });
+
+    const cNd = createCaptureBuffers(payload);
+    expect(await runCli(["$.items[*]", "--ndjson"], cNd.io)).toBe(0);
+    const lines = cNd.getStdout().trim().split("\n");
+    expect(lines.length).toBe(2);
+    expect(JSON.parse(lines[0])).toEqual({ id: 1, name: "Alice" });
+    expect(JSON.parse(lines[1])).toEqual({ id: 2, name: "Bob" });
+
+    const cJsonl = createCaptureBuffers(payload);
+    expect(await runCli(["$.items[*].name", "--jsonl"], cJsonl.io)).toBe(0);
+    expect(cJsonl.getStdout()).toBe('"Alice"\n"Bob"\n');
+
+    // Empty result emits nothing
+    const cEmpty = createCaptureBuffers(payload);
+    expect(await runCli(["$.missing", "--ndjson"], cEmpty.io)).toBe(0);
+    expect(cEmpty.getStdout()).toBe("");
+  });
+
+  it("supports -R / --raw / --raw-output (unquoted strings, raw JSON for non-strings)", async function () {
+    const payload = JSON.stringify({
+      values: ["Alice", 'a "quoted" line', 42, true, null, { k: 1 }],
+    });
+
+    const cRaw = createCaptureBuffers(payload);
+    expect(await runCli(["$.values[*]", "--raw"], cRaw.io)).toBe(0);
+    expect(cRaw.getStdout()).toBe(
+      'Alice\na "quoted" line\n42\ntrue\nnull\n{"k":1}\n'
+    );
+
+    const cShort = createCaptureBuffers(payload);
+    expect(await runCli(["$.values[0]", "-R"], cShort.io)).toBe(0);
+    expect(cShort.getStdout()).toBe("Alice\n");
+
+    const cPtrRaw = createCaptureBuffers(payload);
+    expect(
+      await runCli(["$.values[0, 2]", "--pointer", "--raw-output"], cPtrRaw.io)
+    ).toBe(0);
+    expect(cPtrRaw.getStdout()).toBe("/values/0\n/values/2\n");
+  });
+
+  it("transparently decompresses .gz files and supports -z/--gzip on stdin", async function () {
+    const tmpGz = path.join(
+      os.tmpdir(),
+      `piffero-cli-test-${process.pid}-${Date.now()}.json.gz`
+    );
+    const payload = JSON.stringify({
+      events: [
+        { id: "e1", ok: true },
+        { id: "e2", ok: false },
+        { id: "e3", ok: true },
+      ],
+    });
+    const gzBuf = zlib.gzipSync(Buffer.from(payload, "utf8"));
+    fs.writeFileSync(tmpGz, gzBuf);
+
+    try {
+      // Auto-detected .gz file with --raw
+      const cFile = createCaptureBuffers();
+      expect(
+        await runCli(["$.events[?@.ok == true].id", tmpGz, "--raw"], cFile.io)
+      ).toBe(0);
+      expect(cFile.getStdout()).toBe("e1\ne3\n");
+
+      // Auto-detected .gz file with --pretty
+      const cPretty = createCaptureBuffers();
+      expect(
+        await runCli(["$.events[0].id", tmpGz, "--pretty"], cPretty.io)
+      ).toBe(0);
+      expect(JSON.parse(cPretty.getStdout())).toEqual(["e1"]);
+
+      // Explicit --gzip on stdin
+      const cStdin = createCaptureBuffers(gzBuf);
+      expect(
+        await runCli(["$.events[*].id", "--gzip", "--ndjson"], cStdin.io)
+      ).toBe(0);
+      expect(cStdin.getStdout()).toBe('"e1"\n"e2"\n"e3"\n');
+
+      // Corrupt gzip returns exit code 1
+      const cCorrupt = createCaptureBuffers(Buffer.from("not-valid-gzip"));
+      expect(await runCli(["$.events[*].id", "-z"], cCorrupt.io)).toBe(1);
+      expect(cCorrupt.getStderr()).toContain("Error:");
+    } finally {
+      if (fs.existsSync(tmpGz)) {
+        fs.unlinkSync(tmpGz);
+      }
+    }
+  });
+
   it("returns exit code 1 and writes error on missing args, unknown flags, bad JSONPath, missing file, or malformed JSON", async function () {
     const noArgs = createCaptureBuffers();
     expect(await runCli([], noArgs.io)).toBe(1);
@@ -125,6 +226,7 @@ describe("CLI (runCli) & Dual ESM/CJS Packaging", function () {
 
   it("exports Piffero, PifferoError, PifferoJsonPathError, and runCli consistently", function () {
     expect(typeof Piffero.query).toBe("function");
+    expect(typeof Piffero.iterate).toBe("function");
     expect(typeof PifferoError).toBe("function");
     expect(typeof PifferoJsonPathError).toBe("function");
     expect(typeof runCli).toBe("function");
