@@ -1,6 +1,8 @@
 import * as fs from "fs";
+import * as zlib from "zlib";
 import { Readable, Writable } from "stream";
 import { Piffero, PifferoResultType } from "./piffero";
+import { JsonArrayItemSplitter } from "./utils/jsonArraySplitter";
 
 export interface CliIo {
   stdin?: Readable;
@@ -22,22 +24,34 @@ Zero-dependency streaming RFC 9535 JSONPath CLI for large JSON files & streams.
 
 Arguments:
   <jsonpath>                 JSONPath expression starting with '$' (e.g. '$.items[*].id')
-  [file]                     Path to JSON file (reads from stdin if omitted or '-')
+  [file]                     Path to JSON or .gz file (reads from stdin if omitted or '-')
 
 Options:
   -r, --result-type <type>   Output mode: value | path | pointer | all (default: value)
       --path                 Shorthand for --result-type path (RFC 9535 §2.7 Normalized Paths)
       --pointer              Shorthand for --result-type pointer (RFC 6901 JSON Pointers)
       --all                  Shorthand for --result-type all ({ path, pointer, value })
+      --ndjson, --jsonl      Stream one compact JSON value per line (newline-delimited JSON)
+  -R, --raw, --raw-output    Stream one value per line without quotes for strings (like jq -r)
+  -z, --gzip                 Decompress gzip input (auto-enabled for .gz files)
   -p, --pretty               Pretty-print the JSON array output
   -v, --version              Print package version
   -h, --help                 Show this help message
 
 Examples:
   npx piffero-plus '$.employees[*].name' employees.json
+  npx piffero-plus '$[0:5].id' huge-200mb.json.gz --raw
+  npx piffero-plus '$[0:5]' huge-200mb.json --ndjson
   npx piffero-plus '$[0:5].id' huge-200mb.json --path --pretty
-  cat events.json | npx piffero-plus '$[?@.type == "IssuesEvent"].id'
+  curl -s https://example.com/events.json.gz | npx piffero-plus '$[*].id' --gzip --raw
 `;
+
+function formatRawItem(jsonItem: string): string {
+  if (jsonItem.length >= 2 && jsonItem.charCodeAt(0) === 0x22) {
+    return JSON.parse(jsonItem);
+  }
+  return jsonItem;
+}
 
 export async function runCli(
   argv: string[],
@@ -49,6 +63,9 @@ export async function runCli(
 
   let resultType: PifferoResultType = "value";
   let pretty = false;
+  let ndjson = false;
+  let rawOutput = false;
+  let gzipFlag = false;
   const positionals: string[] = [];
 
   for (let i = 0; i < argv.length; i++) {
@@ -69,6 +86,18 @@ export async function runCli(
     }
     if (arg === "-p" || arg === "--pretty") {
       pretty = true;
+      continue;
+    }
+    if (arg === "--ndjson" || arg === "--jsonl") {
+      ndjson = true;
+      continue;
+    }
+    if (arg === "-R" || arg === "--raw" || arg === "--raw-output") {
+      rawOutput = true;
+      continue;
+    }
+    if (arg === "-z" || arg === "--gzip") {
+      gzipFlag = true;
       continue;
     }
     if (arg === "--path") {
@@ -119,22 +148,65 @@ export async function runCli(
 
   const jsonPath = positionals[0];
   const filePath = positionals[1];
+  const isFileInput = Boolean(filePath && filePath !== "-");
+  const useGzip =
+    gzipFlag || (isFileInput && /\.gz$/i.test(filePath as string));
 
-  let inputStream: Readable;
-  if (filePath && filePath !== "-") {
+  let rawSource: Readable;
+  if (isFileInput) {
     if (!fs.existsSync(filePath)) {
       stderr.write(`Error: File not found: ${filePath}\n`);
       return 1;
     }
-    inputStream = fs.createReadStream(filePath);
+    rawSource = fs.createReadStream(filePath);
   } else {
-    inputStream = stdin;
+    rawSource = stdin;
   }
 
+  let gunzip: zlib.Gunzip | null = null;
+  let inputStream: Readable = rawSource;
+  if (useGzip) {
+    gunzip = zlib.createGunzip();
+    rawSource.pipe(gunzip);
+    inputStream = gunzip;
+  }
+
+  const cleanupSource = () => {
+    if (gunzip) {
+      rawSource.unpipe(gunzip);
+      if (!gunzip.destroyed) {
+        gunzip.destroy();
+      }
+    }
+    if (isFileInput && !rawSource.destroyed && typeof rawSource.destroy === "function") {
+      rawSource.destroy();
+    }
+  };
+
   try {
-    if (pretty) {
-      const raw = await Piffero.findAsPromise(inputStream, jsonPath, {
-        resultType,
+    if (pretty && !ndjson && !rawOutput) {
+      const raw = await new Promise<string>((resolve, reject) => {
+        const onSourceErr = (err: Error) => {
+          cleanupSource();
+          reject(err);
+        };
+        rawSource.on("error", onSourceErr);
+        if (gunzip) {
+          gunzip.on("error", onSourceErr);
+        }
+        Piffero.findAsPromise(inputStream, jsonPath, { resultType }).then(
+          (res) => {
+            rawSource.removeListener("error", onSourceErr);
+            if (gunzip) gunzip.removeListener("error", onSourceErr);
+            resolve(res);
+          },
+          (err) => {
+            rawSource.removeListener("error", onSourceErr);
+            if (gunzip) gunzip.removeListener("error", onSourceErr);
+            cleanupSource();
+            reject(err);
+          }
+        );
       });
       const formatted = JSON.stringify(JSON.parse(raw), null, 2);
       stdout.write(`${formatted}\n`);
@@ -145,22 +217,47 @@ export async function runCli(
       resultType,
     }) as Readable;
 
+    const lineMode = ndjson || rawOutput;
+    const splitter = lineMode ? new JsonArrayItemSplitter() : null;
+
     return await new Promise<number>((resolve) => {
       let settled = false;
       const fail = (err: any) => {
         if (settled) return;
         settled = true;
-        stderr.write(`Error: ${err && err.message ? err.message : String(err)}\n`);
+        cleanupSource();
+        if (!outStream.destroyed) {
+          outStream.destroy();
+        }
+        stderr.write(
+          `Error: ${err && err.message ? err.message : String(err)}\n`
+        );
         resolve(1);
       };
 
-      inputStream.on("error", (err) => {
+      const onUpstreamError = (err: Error) => {
         outStream.destroy(err);
         fail(err);
-      });
+      };
+
+      rawSource.on("error", onUpstreamError);
+      if (gunzip) {
+        gunzip.on("error", onUpstreamError);
+      }
+
+      const emitLineItems = (items: string[]) => {
+        for (let i = 0; i < items.length; i++) {
+          const line = rawOutput ? formatRawItem(items[i]) : items[i];
+          stdout.write(`${line}\n`);
+        }
+      };
 
       outStream.on("data", (chunk) => {
-        stdout.write(chunk);
+        if (splitter) {
+          emitLineItems(splitter.push(chunk as Buffer | string));
+        } else {
+          stdout.write(chunk);
+        }
       });
 
       outStream.on("error", fail);
@@ -168,15 +265,19 @@ export async function runCli(
       outStream.on("end", () => {
         if (settled) return;
         settled = true;
-        stdout.write("\n");
+        if (splitter) {
+          emitLineItems(splitter.end());
+        } else {
+          stdout.write("\n");
+        }
+        cleanupSource();
         resolve(0);
       });
     });
   } catch (err: any) {
-    if (filePath && filePath !== "-" && typeof inputStream.destroy === "function") {
-      inputStream.destroy();
-    }
+    cleanupSource();
     stderr.write(`Error: ${err && err.message ? err.message : String(err)}\n`);
     return 1;
   }
 }
+

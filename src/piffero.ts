@@ -1,6 +1,7 @@
 import { Readable, Stream } from "stream";
 import { parse, MasterHandler, PifferoError } from "./handler/mastehandler";
 import { evaluateInMemory } from "./handler/jsonpathEngine";
+import { JsonArrayItemSplitter } from "./utils/jsonArraySplitter";
 
 /**
  * Minimal structural interface for WHATWG Web `ReadableStream` (e.g. `fetch().body`),
@@ -37,6 +38,15 @@ export type PifferoInput =
  * - `"all"`: Objects `{ path, pointer, value }` for each match.
  */
 export type PifferoResultType = "value" | "path" | "pointer" | "all";
+
+/**
+ * Combined result object emitted when `resultType` is `"all"`.
+ */
+export interface PifferoAllResult<T = any> {
+  path: string;
+  pointer: string;
+  value: T;
+}
 
 /**
  * Optional configuration for `Piffero` query methods.
@@ -322,28 +332,179 @@ export class Piffero {
    * @throws {PifferoJsonPathError} If `jsonPath` has invalid syntax.
    * @throws {PifferoError} If `input` is a stream or contains malformed JSON.
    */
+  static query<T = any>(
+    input: Record<string, any> | any[] | string | Buffer | Uint8Array,
+    jsonPath?: string,
+    options?: { resultType?: "value" }
+  ): T[];
   static query(
+    input: Record<string, any> | any[] | string | Buffer | Uint8Array,
+    jsonPath: string | undefined,
+    options: { resultType: "path" | "pointer" }
+  ): string[];
+  static query<T = any>(
+    input: Record<string, any> | any[] | string | Buffer | Uint8Array,
+    jsonPath: string | undefined,
+    options: { resultType: "all" }
+  ): PifferoAllResult<T>[];
+  static query<T = any>(
+    input: Record<string, any> | any[] | string | Buffer | Uint8Array,
+    jsonPath?: string,
+    options?: PifferoQueryOptions
+  ): T[];
+  static query<T = any>(
     input: Record<string, any> | any[] | string | Buffer | Uint8Array,
     jsonPath: string = "$",
     options?: PifferoQueryOptions
-  ): any[] {
+  ): T[] {
     const parsedPath = parse(jsonPath);
     const resultType = (options && options.resultType) || "value";
 
     if (isNodeReadable(input) || isWebReadableStream(input)) {
       throw new PifferoError(
-        "Piffero.query() only supports synchronous inputs (object, array, string, Buffer); use findByPath() or findAsPromise() for streams"
+        "Piffero.query() only supports synchronous inputs (object, array, string, Buffer); use findByPath(), findAsPromise(), or iterate() for streams"
       );
     }
     if (isBinaryOrString(input)) {
       const raw = new MasterHandler().parseSync(input, parsedPath, options);
-      return JSON.parse(raw);
+      return JSON.parse(raw) as T[];
     }
     if (input !== null && typeof input === "object") {
-      return evaluateInMemory(input, parsedPath.steps || [], resultType);
+      return evaluateInMemory(
+        input,
+        parsedPath.steps || [],
+        resultType
+      ) as T[];
     }
     throw new PifferoError(
       "Invalid input: expected object, array, string, Buffer, or Uint8Array"
     );
+  }
+
+  /**
+   * Streams matched items as an `AsyncIterableIterator` for `for await...of` consumption,
+   * with automatic backpressure and immediate upstream cancellation on early `break`/`return`.
+   *
+   * @param input - Node `Readable`, Web `ReadableStream`, JSON `string`/`Buffer`, or JS object/array.
+   * @param jsonPath - JSONPath expression starting with `$` (defaults to `"$"`).
+   * @param options - Optional query options (e.g. `resultType`).
+   * @returns An `AsyncIterableIterator` yielding each matched JS value, path, pointer, or `{ path, pointer, value }`.
+   * @throws {PifferoJsonPathError} Synchronously if `jsonPath` has invalid syntax.
+   * @throws {PifferoError} Synchronously if `input` is not a supported source type, or asynchronously on malformed JSON.
+   */
+  static iterate<T = any>(
+    input: PifferoInput,
+    jsonPath?: string,
+    options?: { resultType?: "value" }
+  ): AsyncIterableIterator<T>;
+  static iterate(
+    input: PifferoInput,
+    jsonPath: string | undefined,
+    options: { resultType: "path" | "pointer" }
+  ): AsyncIterableIterator<string>;
+  static iterate<T = any>(
+    input: PifferoInput,
+    jsonPath: string | undefined,
+    options: { resultType: "all" }
+  ): AsyncIterableIterator<PifferoAllResult<T>>;
+  static iterate<T = any>(
+    input: PifferoInput,
+    jsonPath?: string,
+    options?: PifferoQueryOptions
+  ): AsyncIterableIterator<T>;
+  static iterate<T = any>(
+    input: PifferoInput,
+    jsonPath: string = "$",
+    options?: PifferoQueryOptions
+  ): AsyncIterableIterator<T> {
+    const parsedPath = parse(jsonPath);
+    const resultType = (options && options.resultType) || "value";
+
+    const isNode = isNodeReadable(input);
+    const isWeb = !isNode && isWebReadableStream(input);
+    const isBin = !isNode && !isWeb && isBinaryOrString(input);
+    const isObj =
+      !isNode && !isWeb && !isBin && input !== null && typeof input === "object";
+
+    if (!isNode && !isWeb && !isBin && !isObj) {
+      throw new PifferoError(
+        "Invalid input: expected Readable stream, Web ReadableStream, string, Buffer, or JSON object/array"
+      );
+    }
+
+    if (isObj) {
+      const results = evaluateInMemory(
+        input,
+        parsedPath.steps || [],
+        resultType
+      ) as T[];
+      return (async function* () {
+        for (let i = 0; i < results.length; i++) {
+          yield results[i];
+        }
+      })();
+    }
+
+    const outStream = (
+      isNode
+        ? new MasterHandler().parse(
+            input as Readable,
+            parsedPath,
+            false,
+            undefined,
+            false,
+            options
+          )
+        : isWeb
+        ? new MasterHandler().parse(
+            webStreamToNodeReadable(input as WebReadableStreamLike),
+            parsedPath,
+            false,
+            undefined,
+            false,
+            options
+          )
+        : new MasterHandler().parse(
+            Readable.from([toBuffer(input as string | Buffer | Uint8Array)]),
+            parsedPath,
+            false,
+            undefined,
+            false,
+            options
+          )
+    ) as Readable;
+
+    const nodeInput = isNode ? (input as Readable) : null;
+    const onInputError = (err: Error) => {
+      if (!outStream.destroyed) {
+        outStream.destroy(err);
+      }
+    };
+    if (nodeInput) {
+      nodeInput.on("error", onInputError);
+    }
+
+    return (async function* () {
+      const splitter = new JsonArrayItemSplitter();
+      try {
+        for await (const chunk of outStream) {
+          const items = splitter.push(chunk as Buffer | string);
+          for (let i = 0; i < items.length; i++) {
+            yield JSON.parse(items[i]) as T;
+          }
+        }
+        const tailItems = splitter.end();
+        for (let i = 0; i < tailItems.length; i++) {
+          yield JSON.parse(tailItems[i]) as T;
+        }
+      } finally {
+        if (nodeInput) {
+          nodeInput.removeListener("error", onInputError);
+        }
+        if (!outStream.destroyed) {
+          outStream.destroy();
+        }
+      }
+    })();
   }
 }

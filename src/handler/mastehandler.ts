@@ -183,6 +183,20 @@ export class MasterHandler implements SaxHandler {
           this.stream.resume();
         }
       },
+      destroy: (err, cb) => {
+        if (this.cStream && !this.cStream.destroyed) {
+          this.cStream.destroy();
+        }
+        if (this.stream) {
+          if (typeof this.stream.unpipe === "function") {
+            this.stream.unpipe(this.cStream);
+          }
+          if (!this.stream.destroyed) {
+            this.stream.destroy();
+          }
+        }
+        cb(err);
+      },
     });
 
     if (
@@ -380,11 +394,12 @@ export class MasterHandler implements SaxHandler {
     if (this.streamingEngine) {
       return;
     }
-    if (!this.currentHandler.isLast && this.currentHandler.status.recording) {
-      let last = this.currentHandler.status.last;
+    while (!this.currentHandler.isLast && this.currentHandler.status.recording) {
+      const prevLast = this.currentHandler.status.last;
       const lastkey = this.currentHandler.status.lastkey;
+      let last = prevLast;
       let depthCounter = 0;
-      if (this.currentHandler.status.last === OPEN_OBJECT) {
+      if (prevLast === OPEN_OBJECT) {
         depthCounter = 1;
         last = FIRST;
       }
@@ -393,6 +408,20 @@ export class MasterHandler implements SaxHandler {
       this.currentHandler.status.last = last;
       this.currentHandler.status.lastkey = lastkey;
       this.currentHandler.status.depthCounter = depthCounter;
+
+      if (
+        prevLast === OPEN_OBJECT &&
+        lastkey !== undefined &&
+        jsonStringMatches(this.currentHandler.status.path.value, lastkey)
+      ) {
+        if (!this.currentHandler.status.isInArray) {
+          this.currentHandler.status.recording = true;
+          this.currentHandler.status.verified = true;
+          this.currentHandler.status.last = KEY;
+        } else {
+          this.currentHandler.status.isMatching = true;
+        }
+      }
     }
   }
 
@@ -716,7 +745,7 @@ class SingleStepHandler {
         (status.isMatching && status.depthCounter === 1)
       ) {
         this.stopHandler();
-        status.resetTemp(`,${string}`);
+        status.resetTemp(string);
         status.depthCounter++;
       } else {
         if (status.needComma) {
@@ -946,7 +975,15 @@ class SingleStepHandler {
       status.recording = true;
       status.verified = true;
       status.depthCounter--;
-      this.push(status.flushTemp());
+      const flushed = status.flushTemp();
+      if (!this.postConditionPath && this.hasEmittedPostCondition) {
+        this.push(`,${flushed}`);
+      } else {
+        this.push(flushed);
+        if (!this.postConditionPath) {
+          this.hasEmittedPostCondition = true;
+        }
+      }
       if (status.needComma && !this.postConditionPath) {
         this.push(`,${node}`);
       } else {

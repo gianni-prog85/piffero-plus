@@ -223,23 +223,33 @@ async function fetchFirstTwoEventPaths(url: string): Promise<string[]> {
 
 ---
 
-### `Piffero.query(input, jsonPath?, options?)`
+### `Piffero.query<T>(input, jsonPath?, options?)`
 
 ```ts
+static query<T = any>(
+  input: Record<string, any> | any[] | string | Buffer | Uint8Array,
+  jsonPath?: string,
+  options?: { resultType?: "value" }
+): T[];
 static query(
   input: Record<string, any> | any[] | string | Buffer | Uint8Array,
-  jsonPath: string = "$",
-  options?: PifferoQueryOptions
-): any[]
+  jsonPath: string | undefined,
+  options: { resultType: "path" | "pointer" }
+): string[];
+static query<T = any>(
+  input: Record<string, any> | any[] | string | Buffer | Uint8Array,
+  jsonPath: string | undefined,
+  options: { resultType: "all" }
+): PifferoAllResult<T>[];
 ```
 
-Synchronously evaluates `jsonPath` against an in-memory JavaScript object/array, JSON `string`, `Buffer`, or `Uint8Array`, returning an array of matched JS values (or paths) directly.
+Synchronously evaluates `jsonPath` against an in-memory JavaScript object/array, JSON `string`, `Buffer`, or `Uint8Array`, returning a typed array of matched JS values (or paths) directly.
 
 - **Parameters**:
   - `input: Record<string, any> | any[] | string | Buffer | Uint8Array` — Already-parsed JS object/array or raw JSON `string`/`Buffer`/`Uint8Array`.
   - `jsonPath: string = "$"` — JSONPath query (defaults to `"$"`).
   - `options?: PifferoQueryOptions` — Optional `{ resultType?: "value" | "path" | "pointer" | "all" }`.
-- **Returns**: `any[]` — Array of matched JS values (`"value"`), Normalized Path strings (`"path"`), JSON Pointer strings (`"pointer"`), or `{ path, pointer, value }` objects (`"all"`).
+- **Returns**: `T[]` (`"value"`), `string[]` (`"path"` / `"pointer"`), or `PifferoAllResult<T>[]` (`"all"`).
 - **Throws synchronously**:
   - `PifferoJsonPathError` if `jsonPath` is syntactically invalid.
   - `PifferoError` if `input` is a stream (`Readable` / `ReadableStream`), `null`/primitive, or contains malformed JSON.
@@ -256,17 +266,73 @@ const doc = {
   ],
 };
 
-// Direct JS values
-const activeNames = Piffero.query(doc, "$.employees[?@.active == true].name");
+// Direct typed JS values
+const activeNames = Piffero.query<string>(doc, "$.employees[?@.active == true].name");
 // => ["John"]
 
-// Canonical RFC 9535 §2.7 Normalized Paths
+// Canonical RFC 9535 §2.7 Normalized Paths (inferred as string[])
 const tagPaths = Piffero.query(doc, "$..tags[*]", { resultType: "path" });
 // => ["$['employees'][0]['tags'][0]", "$['employees'][0]['tags'][1]", "$['employees'][1]['tags'][0]"]
 
-// Combined { path, pointer, value }
-const details = Piffero.query(doc, "$.employees[0].name", { resultType: "all" });
+// Combined { path, pointer, value } (inferred as PifferoAllResult<string>[])
+const details = Piffero.query<string>(doc, "$.employees[0].name", { resultType: "all" });
 // => [{ path: "$['employees'][0]['name']", pointer: "/employees/0/name", value: "John" }]
+```
+
+---
+
+### `Piffero.iterate<T>(input, jsonPath?, options?)`
+
+```ts
+static iterate<T = any>(
+  input: PifferoInput,
+  jsonPath?: string,
+  options?: { resultType?: "value" }
+): AsyncIterableIterator<T>;
+static iterate(
+  input: PifferoInput,
+  jsonPath: string | undefined,
+  options: { resultType: "path" | "pointer" }
+): AsyncIterableIterator<string>;
+static iterate<T = any>(
+  input: PifferoInput,
+  jsonPath: string | undefined,
+  options: { resultType: "all" }
+): AsyncIterableIterator<PifferoAllResult<T>>;
+```
+
+Streams matched items one by one as an `AsyncIterableIterator` for `for await...of` consumption, with automatic backpressure and immediate upstream cleanup (`destroy()` / `reader.cancel()`) when exiting early via `break`, `return`, or `throw`.
+
+- **Parameters**:
+  - `input: PifferoInput` — Node `Readable`, Web `ReadableStream` (`fetch().body`), JSON `string`/`Buffer`/`Uint8Array`, or JS object/array.
+  - `jsonPath: string = "$"` — JSONPath query (defaults to `"$"`).
+  - `options?: PifferoQueryOptions` — Optional `{ resultType?: "value" | "path" | "pointer" | "all" }`.
+- **Returns**: `AsyncIterableIterator<T>` (or `string` for `"path"`/`"pointer"`, `PifferoAllResult<T>` for `"all"`).
+- **Throws synchronously**:
+  - `PifferoJsonPathError` if `jsonPath` is syntactically invalid.
+  - `PifferoError` if `input` is not a supported source type.
+- **Rejects asynchronously**: Throws `PifferoError` (or upstream I/O error) inside the `for await...of` loop on malformed JSON or stream errors.
+
+**Example:**
+
+```ts
+import * as fs from "fs";
+import { Piffero } from "piffero-plus";
+
+interface Event {
+  id: string;
+  type: string;
+}
+
+for await (const ev of Piffero.iterate<Event>(
+  fs.createReadStream("./huge-events.json"),
+  "$[?@.type == 'IssuesEvent']"
+)) {
+  console.log(ev.id);
+  if (ev.id === "target-id") {
+    break; // Immediately destroys the upstream ReadStream!
+  }
+}
 ```
 
 ---

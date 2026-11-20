@@ -3,6 +3,7 @@ export {
   PifferoInput,
   WebReadableStreamLike,
   PifferoResultType,
+  PifferoAllResult,
   PifferoQueryOptions,
 } from './src/piffero';
 export { PifferoError, PifferoJsonPathError } from './src/handler/mastehandler';
