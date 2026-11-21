@@ -4,9 +4,9 @@ Questo documento definisce la roadmap evolutiva di **piffero-plus** (continuazio
 
 ---
 
-## Stato attuale (`piffero-plus@1.1.0`, Fasi 1–5 completate + CLI & Dual ESM/CJS)
+## Stato attuale (`piffero-plus@1.2.0`, Fasi 1–5 completate + `iterate()`, TS Generics, CLI `--ndjson`/`--raw`/`.gz` & Dual ESM/CJS)
 - Parsing incrementale via `CStream` (porting TypeScript di Clarinet con `StringDecoder` e `skipDecode`) e motore `StreamingPathEngine`.
-- API pubblica: `Piffero.findByPath`, `Piffero.findAsString`, `Piffero.findAsPromise`, `Piffero.query` + CLI `npx piffero-plus`.
+- API pubblica tipizzata con generics: `Piffero.findByPath`, `Piffero.findAsString`, `Piffero.findAsPromise<T>`, `Piffero.query<T>`, `Piffero.iterate<T>` + CLI `npx piffero-plus` (`--ndjson`, `--raw`, `--gzip`/`.gz`).
 - Input universale (`PifferoInput`): Node.js `Readable`, WHATWG Web `ReadableStream` (`fetch().body`), `string` / `Buffer` / `Uint8Array`, e oggetti/array JS in-memory.
 - Conformità completa RFC 9535: `$`, `@`, `.`, `..`, `*`, `[index]`, `[start:end:step]`, unioni eterogenee ordinate `[,]`, filtri `?` / `?()` con semantica `NOTHING`, sub-query e riferimenti `$`, funzioni standard (`length`, `count`, `match`, `search`, `value`), espressioni script `()`, e modalità di output `resultType` (`"value" | "path" | "pointer" | "all"` con Normalized Paths §2.7 e JSON Pointer RFC 6901).
 - Interruzione anticipata automatica dello stream (`rootMaxIndex`) per query deterministiche.

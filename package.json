@@ -1,6 +1,6 @@
 {
   "name": "piffero-plus",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Zero-dependency streaming RFC 9535 JSONPath parser & CLI for large JSON files, Node.js Readable streams, Web ReadableStream (fetch), and in-memory JS objects",
   "main": "./dist/index.js",
   "module": "./esm/index.mjs",

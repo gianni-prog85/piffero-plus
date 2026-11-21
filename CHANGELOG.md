@@ -4,6 +4,26 @@ All notable changes to `piffero-plus` are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-11-21
+
+### Added
+- **Async Iterator API (`Piffero.iterate()`)**:
+  - Added `Piffero.iterate<T>(input, jsonPath?, options?)` returning an `AsyncIterableIterator` for `for await...of` streaming consumption across all `PifferoInput` sources (Node.js `Readable`, Web `ReadableStream`, `string`/`Buffer`/`Uint8Array`, and in-memory JS objects/arrays).
+  - Supports automatic backpressure and immediate upstream stream cancellation on early `break`/`return`.
+  - Added zero-dependency streaming `JsonArrayItemSplitter` (`src/utils/jsonArraySplitter.ts`) for incremental JSON array item splitting.
+- **TypeScript Generics & Typed Overloads**:
+  - Added generic `<T = any>` type parameters and `resultType`-aware overloads to `Piffero.query<T>()`, `Piffero.findAsPromise<T>()`, and `Piffero.iterate<T>()`.
+  - Exported `PifferoAllResult<T>` (`{ path: string; pointer: string; value: T }`) from the package root.
+- **CLI Enhancements (`--ndjson`, `--raw`, `.gz` / `--gzip`)**:
+  - Added `--ndjson` / `--jsonl` to stream one compact JSON value per line with O(1) memory.
+  - Added `-R` / `--raw` / `--raw-output` to stream unquoted string values line-by-line (like `jq -r`).
+  - Added `-z` / `--gzip` for streaming gzip decompression (auto-enabled for `.gz` files) with automatic source cleanup on early termination.
+
+### Changed
+- **Tooling & Dev Dependencies**:
+  - Migrated linting from deprecated `tslint` to `eslint` v10 + `typescript-eslint` v8 (`eslint.config.mjs`).
+  - Updated `devDependencies` (`typescript` 5.9, `jasmine` 6.3, `prettier` 3.10, `nyc` 18, `@types/node` 22, `express` 5.3).
+
 ## [1.1.0] - 2026-11-18
 
 ### Added

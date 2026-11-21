@@ -6,6 +6,9 @@ import { Readable, Writable } from "stream";
 import { runCli, Piffero, PifferoError, PifferoJsonPathError } from "../../index";
 
 const TEST_JSON_FILE = path.join(__dirname, "../jsonFiles/john-doe.json");
+const PKG_VERSION: string = JSON.parse(
+  fs.readFileSync(path.join(__dirname, "../../package.json"), "utf8")
+).version;
 
 function createCaptureBuffers(stdinContent?: string | Buffer) {
   let out = "";
@@ -42,7 +45,7 @@ describe("CLI (runCli) & Dual ESM/CJS Packaging", function () {
 
     const v = createCaptureBuffers();
     expect(await runCli(["--version"], v.io)).toBe(0);
-    expect(v.getStdout().trim()).toBe("1.1.0");
+    expect(v.getStdout().trim()).toBe(PKG_VERSION);
   });
 
   it("extracts values from a file in streaming mode and --pretty mode", async function () {
