@@ -1,3 +1,4 @@
+import "../../src/handler/jsonpathEngine";
 import {
   ConditionEval,
   NOTHING,

@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>piffero-plus — RFC 9535 JSONPath Playground</title>
+    <meta
+      name="description"
+      content="Interactive browser playground for piffero-plus — zero-dependency RFC 9535 JSONPath parser with no eval/vm."
+    />
+    <style>
+      :root {
+        --bg: #0b1020;
+        --panel: #12192e;
+        --panel-2: #18213d;
+        --border: #263357;
+        --text: #e6ecff;
+        --muted: #93a3c7;
+        --accent: #6366f1;
+        --accent-hover: #818cf8;
+        --ok: #10b981;
+        --err: #f43f5e;
+        --warn: #f59e0b;
+        --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+        --sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: var(--sans);
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 20px;
+        border-bottom: 1px solid var(--border);
+        background: var(--panel);
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .brand h1 {
+        margin: 0;
+        font-size: 1.1rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+
+      .badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .badge {
+        font-size: 0.72rem;
+        font-weight: 600;
+        padding: 3px 8px;
+        border-radius: 999px;
+        background: var(--panel-2);
+        border: 1px solid var(--border);
+        color: var(--muted);
+      }
+
+      .badge.green {
+        color: #6ee7b7;
+        border-color: rgba(16, 185, 129, 0.35);
+      }
+
+      .links {
+        display: flex;
+        gap: 12px;
+        font-size: 0.85rem;
+      }
+
+      .links a {
+        color: var(--muted);
+        text-decoration: none;
+        font-weight: 500;
+      }
+
+      .links a:hover {
+        color: var(--text);
+      }
+
+      main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 16px 20px 20px;
+        max-width: 1440px;
+        width: 100%;
+        margin: 0 auto;
+      }
+
+      .query-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: stretch;
+      }
+
+      .path-wrap {
+        flex: 1 1 360px;
+        display: flex;
+        align-items: center;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 0 12px;
+        transition: border-color 0.15s;
+      }
+
+      .path-wrap:focus-within {
+        border-color: var(--accent);
+      }
+
+      .path-wrap.invalid {
+        border-color: var(--err);
+      }
+
+      .path-label {
+        font-family: var(--mono);
+        font-size: 0.8rem;
+        color: var(--muted);
+        margin-right: 10px;
+        user-select: none;
+      }
+
+      #pathInput {
+        flex: 1;
+        background: transparent;
+        border: none;
+        outline: none;
+        color: var(--text);
+        font-family: var(--mono);
+        font-size: 0.95rem;
+        padding: 11px 0;
+      }
+
+      .segmented {
+        display: inline-flex;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 3px;
+        gap: 2px;
+      }
+
+      .segmented button {
+        background: transparent;
+        border: none;
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 0.8rem;
+        padding: 7px 11px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: background 0.15s, color 0.15s;
+      }
+
+      .segmented button.active {
+        background: var(--accent);
+        color: #fff;
+      }
+
+      .segmented button:hover:not(.active) {
+        color: var(--text);
+        background: var(--panel-2);
+      }
+
+      .presets {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .presets-label {
+        font-size: 0.78rem;
+        color: var(--muted);
+        margin-right: 4px;
+      }
+
+      .chip {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        color: var(--text);
+        font-size: 0.78rem;
+        padding: 5px 10px;
+        border-radius: 999px;
+        cursor: pointer;
+        transition: border-color 0.15s, background 0.15s;
+      }
+
+      .chip:hover {
+        border-color: var(--accent);
+        background: var(--panel-2);
+      }
+
+      .grid {
+        flex: 1;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+        min-height: 460px;
+      }
+
+      @media (max-width: 860px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .pane {
+        display: flex;
+        flex-direction: column;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+        min-height: 420px;
+      }
+
+      .pane-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 9px 14px;
+        background: var(--panel-2);
+        border-bottom: 1px solid var(--border);
+        font-size: 0.8rem;
+      }
+
+      .pane-title {
+        font-weight: 600;
+        color: var(--text);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .pane-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .btn {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        color: var(--text);
+        font-size: 0.76rem;
+        padding: 4px 9px;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+
+      .btn:hover {
+        border-color: var(--accent);
+      }
+
+      .stat {
+        font-family: var(--mono);
+        font-size: 0.75rem;
+        color: var(--muted);
+      }
+
+      .stat.ok {
+        color: #6ee7b7;
+      }
+
+      .stat.err {
+        color: #fda4af;
+      }
+
+      textarea,
+      pre {
+        flex: 1;
+        margin: 0;
+        padding: 14px;
+        font-family: var(--mono);
+        font-size: 0.84rem;
+        line-height: 1.55;
+        background: transparent;
+        color: var(--text);
+        border: none;
+        outline: none;
+        resize: none;
+        overflow: auto;
+        white-space: pre;
+        tab-size: 2;
+      }
+
+      .error-box {
+        display: none;
+        margin: 12px 14px 0;
+        padding: 10px 12px;
+        border-radius: 8px;
+        background: rgba(244, 63, 94, 0.12);
+        border: 1px solid rgba(244, 63, 94, 0.4);
+        color: #fecdd3;
+        font-family: var(--mono);
+        font-size: 0.8rem;
+        white-space: pre-wrap;
+      }
+
+      .error-box.visible {
+        display: block;
+      }
+
+      footer {
+        padding: 10px 20px;
+        border-top: 1px solid var(--border);
+        font-size: 0.78rem;
+        color: var(--muted);
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      footer code {
+        font-family: var(--mono);
+        color: var(--text);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <h1>piffero-plus Playground</h1>
+        <div class="badges">
+          <span class="badge green">RFC 9535</span>
+          <span class="badge green">0 deps</span>
+          <span class="badge green">No eval / vm</span>
+          <span class="badge">piffero-plus/query (Browser ESM)</span>
+        </div>
+      </div>
+      <nav class="links">
+        <a href="https://github.com/gianni-prog85/piffero-plus" target="_blank" rel="noreferrer">GitHub</a>
+        <a href="https://www.npmjs.com/package/piffero-plus" target="_blank" rel="noreferrer">npm</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="query-bar">
+        <div class="path-wrap" id="pathWrap">
+          <span class="path-label">JSONPath</span>
+          <input
+            id="pathInput"
+            type="text"
+            spellcheck="false"
+            autocomplete="off"
+            value="$.store.book[?@.price < 10].title"
+            aria-label="JSONPath expression"
+          />
+        </div>
+        <div class="segmented" role="group" aria-label="Result type">
+          <button type="button" data-type="value" class="active">value</button>
+          <button type="button" data-type="path">path</button>
+          <button type="button" data-type="pointer">pointer</button>
+          <button type="button" data-type="all">all</button>
+        </div>
+      </section>
+
+      <section class="presets">
+        <span class="presets-label">Examples:</span>
+        <button type="button" class="chip" data-path="$.store.book[*].title">All titles</button>
+        <button type="button" class="chip" data-path="$.store.book[-1]">Last book ([-1])</button>
+        <button type="button" class="chip" data-path="$.store.book[?@.price < 10].title">Price &lt; 10</button>
+        <button type="button" class="chip" data-path="$.store.book[?length(@.author) > 12].author">RFC 9535 length()</button>
+        <button type="button" class="chip" data-path='$.store.book[?match(@.category, "fiction")].title'>RFC 9535 match()</button>
+        <button type="button" class="chip" data-path="$.store.book[(@.length-1)].title">Goessner (@.length-1)</button>
+        <button type="button" class="chip" data-path="$..price">Recursive $..price</button>
+        <button type="button" class="chip" data-path="$.store.book[0:2].title">Slice [0:2]</button>
+      </section>
+
+      <section class="grid">
+        <div class="pane">
+          <div class="pane-head">
+            <span class="pane-title">JSON Input <span class="stat" id="inputSize"></span></span>
+            <div class="pane-actions">
+              <button type="button" class="btn" id="formatBtn">Format</button>
+              <button type="button" class="btn" id="resetBtn">Reset</button>
+            </div>
+          </div>
+          <textarea id="jsonInput" spellcheck="false" aria-label="JSON input"></textarea>
+        </div>
+
+        <div class="pane">
+          <div class="pane-head">
+            <span class="pane-title">
+              Result
+              <span class="stat ok" id="matchStat"></span>
+              <span class="stat" id="timeStat"></span>
+            </span>
+            <div class="pane-actions">
+              <button type="button" class="btn" id="shareBtn">Share link</button>
+              <button type="button" class="btn" id="copyBtn">Copy</button>
+            </div>
+          </div>
+          <div class="error-box" id="errorBox"></div>
+          <pre id="resultOut"></pre>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <span>Evaluated 100% locally in your browser via <code>import { query } from "piffero-plus/query"</code></span>
+      <span>MIT License &middot; Giovanni Fiorentino</span>
+    </footer>
+
+    <script type="module">
+      import { query, PifferoError, PifferoJsonPathError } from "./lib/query.js";
+
+      const SAMPLE_JSON = {
+        store: {
+          book: [
+            {
+              category: "reference",
+              author: "Nigel Rees",
+              title: "Sayings of the Century",
+              price: 8.95,
+            },
+            {
+              category: "fiction",
+              author: "Evelyn Waugh",
+              title: "Sword of Honour",
+              price: 12.99,
+            },
+            {
+              category: "fiction",
+              author: "Herman Melville",
+              title: "Moby Dick",
+              isbn: "0-553-21311-3",
+              price: 8.99,
+            },
+            {
+              category: "fiction",
+              author: "J. R. R. Tolkien",
+              title: "The Lord of the Rings",
+              isbn: "0-395-19395-8",
+              price: 22.99,
+            },
+          ],
+          bicycle: {
+            color: "red",
+            price: 399,
+          },
+        },
+      };
+
+      const pathInput = document.getElementById("pathInput");
+      const pathWrap = document.getElementById("pathWrap");
+      const jsonInput = document.getElementById("jsonInput");
+      const resultOut = document.getElementById("resultOut");
+      const errorBox = document.getElementById("errorBox");
+      const matchStat = document.getElementById("matchStat");
+      const timeStat = document.getElementById("timeStat");
+      const inputSize = document.getElementById("inputSize");
+      const typeButtons = [...document.querySelectorAll(".segmented button")];
+
+      let resultType = "value";
+
+      function setResultType(next) {
+        resultType = next;
+        for (const b of typeButtons) {
+          b.classList.toggle("active", b.dataset.type === next);
+        }
+        evaluate();
+      }
+
+      function loadFromHash() {
+        const hash = location.hash.slice(1);
+        if (!hash) return;
+        const params = new URLSearchParams(hash);
+        const p = params.get("path");
+        const t = params.get("type");
+        if (p) pathInput.value = p;
+        if (t && ["value", "path", "pointer", "all"].includes(t)) {
+          resultType = t;
+          for (const b of typeButtons) {
+            b.classList.toggle("active", b.dataset.type === t);
+          }
+        }
+      }
+
+      function evaluate() {
+        const raw = jsonInput.value;
+        inputSize.textContent = `(${new Blob([raw]).size} B)`;
+        errorBox.classList.remove("visible");
+        errorBox.textContent = "";
+        pathWrap.classList.remove("invalid");
+
+        let parsed;
+        try {
+          parsed = JSON.parse(raw);
+        } catch (err) {
+          matchStat.textContent = "Invalid JSON";
+          matchStat.className = "stat err";
+          timeStat.textContent = "";
+          resultOut.textContent = "";
+          errorBox.textContent = `JSON parse error: ${err.message}`;
+          errorBox.classList.add("visible");
+          return;
+        }
+
+        const expr = pathInput.value;
+        const t0 = performance.now();
+        try {
+          const matches = query(parsed, expr, { resultType });
+          const elapsed = performance.now() - t0;
+          matchStat.textContent = `${matches.length} ${matches.length === 1 ? "match" : "matches"}`;
+          matchStat.className = "stat ok";
+          timeStat.textContent =
+            elapsed < 1 ? `${(elapsed * 1000).toFixed(0)} µs` : `${elapsed.toFixed(2)} ms`;
+          resultOut.textContent = JSON.stringify(matches, null, 2);
+        } catch (err) {
+          pathWrap.classList.add("invalid");
+          const label =
+            err instanceof PifferoJsonPathError
+              ? "JSONPath syntax error"
+              : err instanceof PifferoError
+              ? "PifferoError"
+              : "Error";
+          matchStat.textContent = label;
+          matchStat.className = "stat err";
+          timeStat.textContent = "";
+          resultOut.textContent = "";
+          errorBox.textContent = `${label}: ${err.message}`;
+          errorBox.classList.add("visible");
+        }
+      }
+
+      jsonInput.value = JSON.stringify(SAMPLE_JSON, null, 2);
+      loadFromHash();
+      evaluate();
+
+      pathInput.addEventListener("input", evaluate);
+      jsonInput.addEventListener("input", evaluate);
+
+      for (const btn of typeButtons) {
+        btn.addEventListener("click", () => setResultType(btn.dataset.type));
+      }
+
+      for (const chip of document.querySelectorAll(".chip")) {
+        chip.addEventListener("click", () => {
+          pathInput.value = chip.dataset.path;
+          evaluate();
+        });
+      }
+
+      document.getElementById("formatBtn").addEventListener("click", () => {
+        try {
+          jsonInput.value = JSON.stringify(JSON.parse(jsonInput.value), null, 2);
+          evaluate();
+        } catch {
+          evaluate();
+        }
+      });
+
+      document.getElementById("resetBtn").addEventListener("click", () => {
+        jsonInput.value = JSON.stringify(SAMPLE_JSON, null, 2);
+        pathInput.value = "$.store.book[?@.price < 10].title";
+        setResultType("value");
+      });
+
+      document.getElementById("copyBtn").addEventListener("click", async (e) => {
+        const btn = e.currentTarget;
+        try {
+          await navigator.clipboard.writeText(resultOut.textContent);
+          btn.textContent = "Copied!";
+          setTimeout(() => (btn.textContent = "Copy"), 1200);
+        } catch {
+          btn.textContent = "Copy failed";
+          setTimeout(() => (btn.textContent = "Copy"), 1200);
+        }
+      });
+
+      document.getElementById("shareBtn").addEventListener("click", async (e) => {
+        const btn = e.currentTarget;
+        const params = new URLSearchParams({ path: pathInput.value, type: resultType });
+        history.replaceState(null, "", `#${params.toString()}`);
+        try {
+          await navigator.clipboard.writeText(location.href);
+          btn.textContent = "Link copied!";
+          setTimeout(() => (btn.textContent = "Share link"), 1200);
+        } catch {
+          btn.textContent = "URL updated";
+          setTimeout(() => (btn.textContent = "Share link"), 1200);
+        }
+      });
+    </script>
+  </body>
+</html>

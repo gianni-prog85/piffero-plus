@@ -3,7 +3,7 @@ import {
   ExprNode,
   decodeJsonPathStringInner,
 } from "../conditioneval/conditioneval";
-import { SaxHandler } from "../libs/clarinet/cstream";
+import type { SaxHandler } from "../libs/clarinet/saxHandler";
 
 export type JsonPathStep =
   | { kind: "child"; key: string; recursive?: boolean }
@@ -41,6 +41,8 @@ export interface LegacyParsedPath {
 }
 
 export const PATH_ERROR_MESSAGE = "Invalid json path";
+
+export class PifferoError extends Error {}
 
 export class PifferoJsonPathError extends Error {}
 

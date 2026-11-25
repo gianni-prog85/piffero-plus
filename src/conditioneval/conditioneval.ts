@@ -1173,9 +1173,6 @@ export class ConditionEval {
 
   private static getQueryHooks(): QueryEvaluatorHooks {
     if (!this.queryHooks) {
-      require("../handler/jsonpathEngine");
-    }
-    if (!this.queryHooks) {
       throw new Error("Query evaluator hooks are not registered");
     }
     return this.queryHooks;
