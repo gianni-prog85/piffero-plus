@@ -398,7 +398,36 @@ app.get("/api/query", (req, res) => {
 | Large matched output (thousands of records) or HTTP / file pass-through | `Piffero.findByPath()` | Streams 4 KiB JSON chunks incrementally with backpressure; never materializes the full output string in memory |
 | Small/medium matched output from a huge input stream (`fs.createReadStream`, `fetch().body`) | `Piffero.findAsPromise()` or `Piffero.findAsString()` | Uses 16 KiB string buffers with zero `Readable` stream wrapper overhead (**~0.45–0.55 ms** on early-file 200 MiB lookups) |
 | In-memory JS objects/arrays or synchronous `string`/`Buffer` payloads | `Piffero.query()` | Evaluates directly in-memory (**~3.0x–3.6x faster** than `jsonpath-plus`) or via `parseSync` and returns `any[]` directly |
+| Browser, Cloudflare Workers, Deno, Bun, or zero-Node-polyfill bundlers | `query()` from `"piffero-plus/query"` | Pure ES2020 ESM with **0 Node.js built-ins** (`stream`, `fs`, `Buffer`), **24.1 KB gzipped**, and **3.7x–7.8x faster** filters than `jsonpath-plus` |
 | Legacy callback codebase | `Piffero.findAsString()` | Direct `(result, err)` callback without Promise allocation |
+
+---
+
+## Browser & Edge Subpath (`piffero-plus/query`)
+
+For environments without Node.js built-ins (**browsers, Cloudflare Workers, Deno, Bun, Vite/Webpack/esbuild without polyfills**), import from the dedicated `"piffero-plus/query"` subpath ([`src/query.ts`](../src/query.ts)):
+
+```ts
+import {
+  query,
+  Piffero,
+  PifferoError,
+  PifferoJsonPathError,
+  type QueryInput,
+  type PifferoResultType,
+  type PifferoAllResult,
+  type PifferoQueryOptions,
+} from "piffero-plus/query";
+
+// Named helper or drop-in Piffero.query() namespace
+const titles = query(data, "$.store.book[?@.price < 10].title");
+const pointers = Piffero.query(data, "$.store.book[-1]", { resultType: "pointer" });
+```
+
+- **Inputs (`QueryInput`)**: In-memory JS object/array, JSON `string`, or UTF-8 `Uint8Array` (decoded via Web-standard `TextDecoder`).
+- **Scope**: Synchronous in-memory evaluation only (no `node:stream`, `node:fs`, or `Buffer`). For streaming large files or `fetch().body` with bounded RAM, use the main `"piffero-plus"` entry point (`Piffero.iterate()`, `Piffero.findByPath()`).
+- **Security**: Zero `eval`, `new Function`, or `vm` usage.
+- **Bundle size**: Pure ES2020 ESM (`esm/browser/query.js`), ~24.1 KB gzipped (unminified) with TypeScript declarations (`dist/src/query.d.ts`) and CommonJS fallback (`dist/src/query.js`).
 
 ---
 
@@ -447,6 +476,7 @@ npx piffero-plus '$.employees[0].name' ./employees.json --all
 
 ## Related Documentation
 
+- [Interactive Browser Playground](./playground/index.html)
 - [JSONPath Syntax & RFC 9535 Semantics Guide](./jsonpath-guide.md)
 - [Internal Architecture & Performance Optimizations](./architecture.md)
 - [Why Choose `piffero-plus`](./advantages.md)
