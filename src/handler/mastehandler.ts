@@ -6,6 +6,7 @@ import {
   buildLegacyAndDetermineEngine,
   LegacyParsedPath,
   PATH_ERROR_MESSAGE,
+  PifferoError,
   PifferoJsonPathError,
 } from "./jsonpathEngine";
 
@@ -18,9 +19,8 @@ const CLOSE_ARRAY = "array-close";
 const VALUE = "value";
 const KEY = "key";
 const FIRST = "first";
-export { PATH_ERROR_MESSAGE, PifferoJsonPathError };
+export { PATH_ERROR_MESSAGE, PifferoError, PifferoJsonPathError };
 export const PATH_DOESNT_MATCH = "Path doesn't match";
-export class PifferoError extends Error {}
 
 const STREAM_CHUNK_THRESHOLD = 4096;
 const STRING_CHUNK_THRESHOLD = 16384;

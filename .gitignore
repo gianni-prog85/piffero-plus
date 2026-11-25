@@ -1,5 +1,6 @@
 node_modules/
 dist
+esm/browser/
 **/private
 citylots.json
 .nyc_output/

@@ -132,6 +132,21 @@ for await (const name of Piffero.iterate<string>(
 }
 ```
 
+### Browser, Edge, Cloudflare Workers, Deno & Bun (`piffero-plus/query`)
+
+Need synchronous in-memory JSONPath in a **browser or edge runtime** with zero Node.js built-ins (`stream`, `fs`, `Buffer`) and zero `eval`/`vm`? Import the dedicated browser-safe subpath:
+
+```ts
+import { query, Piffero, PifferoJsonPathError } from "piffero-plus/query";
+
+const titles = query(data, "$.store.book[?@.price < 10].title");
+const pointers = Piffero.query(data, "$.store.book[-1]", { resultType: "pointer" });
+```
+
+### Interactive Playground
+
+An interactive zero-bundler browser playground powered directly by `piffero-plus/query` is included in [`docs/playground/index.html`](./docs/playground/index.html) (ready for GitHub Pages from `docs/`).
+
 ---
 
 ## API Overview

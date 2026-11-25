@@ -1,18 +1,8 @@
 import { Writable } from "stream";
 import { StringDecoder } from "string_decoder";
 
-export interface SaxHandler {
-  skipDecode?: boolean;
-  onopenobject(node: any): void;
-  oncloseobject(): void;
-  onopenarray(): void;
-  onclosearray(): void;
-  onkey(node: any): void;
-  onvalue(node: any): void;
-  onend(): void;
-  onclose(): void;
-  onerror(er: any): void;
-}
+import { SaxHandler } from "./saxHandler";
+export { SaxHandler };
 
 const Char = {
   tab: 0x09, // \t

@@ -17,6 +17,13 @@
       "require": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./query": {
+      "types": "./dist/src/query.d.ts",
+      "browser": "./esm/browser/query.js",
+      "import": "./esm/browser/query.js",
+      "require": "./dist/src/query.js",
+      "default": "./esm/browser/query.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -28,7 +35,8 @@
     "test": "jasmine --require=ts-node/register",
     "nyc:report": "nyc report",
     "coverage": "nyc npm run test",
-    "build": "tsc",
+    "build": "tsc && npm run build:browser",
+    "build:browser": "node -e \"require('fs').rmSync('esm/browser',{recursive:true,force:true})\" && tsc -p tsconfig.browser.json && node scripts/build-browser.mjs",
     "format": "prettier --write \"src/**/*.ts\"",
     "lint": "eslint src index.ts",
     "prepare": "npm run build ",
