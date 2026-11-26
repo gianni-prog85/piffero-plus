@@ -4,6 +4,20 @@ All notable changes to `piffero-plus` are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-11-26
+
+### Added
+- **Browser & Edge Subpath (`piffero-plus/query`)**:
+  - Added dedicated `"piffero-plus/query"` subpath export (`src/query.ts`, `esm/browser/query.js`, `dist/src/query.js`, `dist/src/query.d.ts`) targeting browsers, Cloudflare Workers, Deno, Bun, and zero-polyfill bundlers (~24.1 KB gzipped).
+  - Guaranteed **zero Node.js built-ins** (`stream`, `fs`, `Buffer`, `string_decoder`) and **zero dynamic code evaluation** (`eval`, `new Function`, `vm`), enforced automatically at build time (`scripts/build-browser.mjs`) and in the test suite (`spec/piffero/queryBrowserSpec.ts`).
+  - Exposes `query<T>()` and drop-in `Piffero.query<T>()` supporting in-memory JS objects/arrays, raw JSON `string`, and UTF-8 `Uint8Array` (`QueryInput`), plus `PifferoError`, `PifferoJsonPathError`, and typed `resultType` overloads (`"value" | "path" | "pointer" | "all"`).
+- **Interactive Browser Playground**:
+  - Added standalone zero-bundler interactive playground (`docs/playground/index.html`) powered directly by `piffero-plus/query` and ready for GitHub Pages hosting.
+
+### Changed
+- **Browser-Safe Core Decoupling**:
+  - Extracted pure TypeScript `SaxHandler` interface into `src/libs/clarinet/saxHandler.ts` and removed CommonJS `require()` fallback in `ConditionEval` so the core JSONPath engine compiles cleanly to pure ES2020 ESM.
+
 ## [1.2.0] - 2026-11-21
 
 ### Added
